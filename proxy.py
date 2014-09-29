@@ -88,8 +88,11 @@ def get_completions(process_uuid):
     data = request.get_json(force=True)
     if 'patches' in data:
         ycm.apply_patches(data['patches'])
-    ycm.parse(data['file'], data['line'], data['ch'])
-    return jsonify(completions=ycm.get_completions(data['file'], data['line'], data['ch']))
+    errors = ycm.parse(data['file'], data['line'], data['ch'])
+    return jsonify(
+        completions=ycm.get_completions(data['file'], data['line'], data['ch']),
+        errors=errors
+    )
 
 
 @atexit.register

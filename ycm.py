@@ -87,6 +87,10 @@ class YCM(object):
                 }
             }
         result = self._request("event_notification", request)
+        try:
+            return result.json()
+        except:
+            return None
 
     def get_completions(self, filepath, line, ch):
         self._update_ping()
