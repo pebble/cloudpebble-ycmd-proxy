@@ -1,5 +1,7 @@
+#!/usr/bin/env python
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 from flask import Flask, request, jsonify
+from flask.ext.cors import cross_origin
 import uuid
 import tempfile
 import os
@@ -77,6 +79,7 @@ def FlagsForFile(filename, **kwargs):
     return jsonify(success=True, uuid=this_uuid)
 
 @app.route('/ycm/<process_uuid>/completions', methods=['POST'])
+@cross_origin(headers=["X-Requested-With","X-CSRFToken","Content-Type"])
 def get_completions(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
@@ -114,5 +117,5 @@ if __name__ == '__main__':
     g = gevent.spawn(monitor_processes, mapping)
     atexit.register(lambda: g.kill())
 
-    app.debug = True
-    app.run()
+    app.debug = settings.DEBUG
+    app.run(settings.HOST, settings.PORT)

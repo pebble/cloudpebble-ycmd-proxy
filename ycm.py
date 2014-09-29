@@ -55,11 +55,12 @@ class YCM(object):
                 end = patch['end']
 
                 # Including everything up to the start line
-                content = lines[:start['line']-1]
+                content = lines[:start['line']]
                 # Merge the start line, replacement, and end line into a single line
-                content.append(lines[start['line']-1][:start['ch']] + patch['text'] + lines[end['line']-1][end['ch']:])
+                merged_line = lines[start['line']][:start['ch']] + "\n".join(patch['text']) + lines[end['line']][end['ch']:]
+		content.append(merged_line)
                 # Add the lines from the end through to the end.
-                content.extend(lines[end['line']:])
+                content.extend(lines[end['line']+1:])
 
             # Writeback.
             with open(abs_path, 'w') as f:
@@ -75,8 +76,8 @@ class YCM(object):
             request = {
                 'event_name': 'FileReadyToParse',
                 'filepath': path,
-                'line_num': line,
-                'column_num': ch,
+                'line_num': line + 1,
+                'column_num': ch + 1,
                 'file_data': {
                     path: {
                         'contents': f.read(),
@@ -85,16 +86,15 @@ class YCM(object):
                 }
             }
         result = self._request("event_notification", request)
-        print result.json()
-        return result.json()
+	print result.text
 
     def get_completions(self, filepath, line, ch):
         self._update_ping()
         path = self._abs_path(filepath)
         with open(path) as f:
             request = {
-                'column_num': ch,
-                'line_num': line,
+                'column_num': ch + 1,
+                'line_num': line + 1,
                 'filepath': path,
                 'file_data': {
                     path: {
@@ -106,6 +106,7 @@ class YCM(object):
             }
 
         result = self._request("completions", request)
+	print result.text
         if result.status_code == 200:
             return result.json()
         else:
