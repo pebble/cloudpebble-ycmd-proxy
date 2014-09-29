@@ -12,6 +12,7 @@ import gevent
 import requests.exceptions
 import shutil
 import time
+from symbol_blacklist import is_valid_symbol
 
 import settings
 
@@ -58,7 +59,7 @@ class YCM(object):
                 content = lines[:start['line']]
                 # Merge the start line, replacement, and end line into a single line
                 merged_line = lines[start['line']][:start['ch']] + "\n".join(patch['text']) + lines[end['line']][end['ch']:]
-		content.append(merged_line)
+                content.append(merged_line)
                 # Add the lines from the end through to the end.
                 content.extend(lines[end['line']+1:])
 
@@ -86,7 +87,6 @@ class YCM(object):
                 }
             }
         result = self._request("event_notification", request)
-	print result.text
 
     def get_completions(self, filepath, line, ch):
         self._update_ping()
@@ -106,11 +106,16 @@ class YCM(object):
             }
 
         result = self._request("completions", request)
-	print result.text
+        print result.text
         if result.status_code == 200:
-            return result.json()
+            response = result.json()
+            completions = map(self._clean_symbol, filter(is_valid_symbol, response['completions'])[:10])
+            return {
+                'completions': completions,
+                'completion_start_column': response['completion_start_column'],
+            }
         else:
-            raise Exception("Something broke.")
+            return {'completions': []}
 
     def wait(self):
         while True:
@@ -132,8 +137,8 @@ class YCM(object):
 
     def _abs_path(self, path):
         abs_path = os.path.normpath(os.path.join(self.root_dir, path))
-        # if not abs_path.startswith(self.root_dir):
-        #     raise Exception("Bad path")
+        if not abs_path.startswith(self.root_dir):
+            raise Exception("Bad path")
         return abs_path
 
     def _request(self, endpoint, data):
@@ -165,3 +170,9 @@ class YCM(object):
         port = sock.getsockname()[1]
         sock.close()
         return port
+
+    @staticmethod
+    def _clean_symbol(sym):
+        sym = sym.copy()
+        sym['detailed_info'] = sym['detailed_info'].split("\n")[0]
+        return sym
