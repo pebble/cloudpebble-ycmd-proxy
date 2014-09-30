@@ -81,6 +81,7 @@ def FlagsForFile(filename, **kwargs):
     # victory!
     return jsonify(success=True, uuid=this_uuid)
 
+
 @app.route('/ycm/<process_uuid>/completions', methods=['POST'])
 def get_completions(process_uuid):
     if process_uuid not in mapping:
@@ -94,6 +95,7 @@ def get_completions(process_uuid):
         completions=ycm.get_completions(data['file'], data['line'], data['ch'])
     )
 
+
 @app.route('/ycm/<process_uuid>/errors', methods=['POST'])
 def get_errors(process_uuid):
     if process_uuid not in mapping:
@@ -106,6 +108,26 @@ def get_errors(process_uuid):
     return jsonify(
         errors=ycm.parse(data['file'], data['line'], data['ch'])
     )
+
+
+@app.route('/ycm/<process_uuid>/create', methods=['POST'])
+def create_file(process_uuid):
+    if process_uuid not in mapping:
+        return "Not found", 404
+    ycm = mapping[process_uuid]
+    data = request.get_json(force=True)
+    ycm.create_file(data['filename'], data['content'])
+    return 'ok'
+
+
+@app.route('/ycm/<process_uuid>/delete', methods=['POST'])
+def delete_file(process_uuid):
+    if process_uuid not in mapping:
+        return "Not found", 404
+    ycm = mapping[process_uuid]
+    data = request.get_json(force=True)
+    ycm.delete_file(data['filename'])
+    return 'ok'
 
 
 @atexit.register

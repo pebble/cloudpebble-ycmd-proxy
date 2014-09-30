@@ -12,8 +12,9 @@ import gevent
 import requests.exceptions
 import shutil
 import time
-from symbol_blacklist import is_valid_symbol
+import os
 
+from symbol_blacklist import is_valid_symbol
 import settings
 
 __author__ = 'katharine'
@@ -90,6 +91,15 @@ class YCM(object):
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
+
+    def create_file(self, path, content):
+        path = self._abs_path(path)
+        with open(path, 'w') as f:
+            f.write(content)
+
+    def delete_file(self, path):
+        path = self._abs_path(path)
+        os.unlink(path)
 
     def parse(self, filepath, line, ch):
         self._update_ping()
