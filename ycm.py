@@ -123,6 +123,13 @@ class YCM(object):
         except:
             return None
 
+    def ping(self):
+        self._update_ping()
+        headers = {
+            'X-Ycm-Hmac': self._hmac(''),
+        }
+        return requests.get("http://localhost:%d/healthy" % self._port, headers=headers).status_code == 200
+
     def get_completions(self, filepath, line, ch):
         self._update_ping()
         path = self._abs_path(filepath)
@@ -176,7 +183,7 @@ class YCM(object):
             raise Exception("Bad path")
         return abs_path
 
-    def _request(self, endpoint, data):
+    def _request(self, endpoint, data=None):
         body = json.dumps(data)
         headers = {
             'X-Ycm-Hmac': self._hmac(body),

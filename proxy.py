@@ -130,6 +130,16 @@ def delete_file(process_uuid):
     return 'ok'
 
 
+@app.route('/ycm/<process_uuid>/ping', methods=['POST'])
+def ping(process_uuid):
+    if process_uuid not in mapping:
+        return "Not found", 404
+    if mapping[process_uuid].ping():
+        return 'ok'
+    else:
+        return 'failed', 503
+
+
 @atexit.register
 def kill_completers():
     global mapping
