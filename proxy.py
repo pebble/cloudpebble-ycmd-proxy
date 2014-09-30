@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 from flask import Flask, request, jsonify
-from flask.ext.cors import cross_origin
+from flask.ext.cors import CORS, cross_origin
 import uuid
 import tempfile
 import os
@@ -14,6 +14,8 @@ import settings
 from ycm import YCM
 
 app = Flask(__name__)
+
+cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
 
 mapping = {}
 
@@ -80,7 +82,6 @@ def FlagsForFile(filename, **kwargs):
     return jsonify(success=True, uuid=this_uuid)
 
 @app.route('/ycm/<process_uuid>/completions', methods=['POST'])
-@cross_origin(headers=["X-Requested-With","X-CSRFToken","Content-Type"])
 def get_completions(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
@@ -88,10 +89,22 @@ def get_completions(process_uuid):
     data = request.get_json(force=True)
     if 'patches' in data:
         ycm.apply_patches(data['patches'])
-    errors = ycm.parse(data['file'], data['line'], data['ch'])
+    ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
     return jsonify(
-        completions=ycm.get_completions(data['file'], data['line'], data['ch']),
-        errors=errors
+        completions=ycm.get_completions(data['file'], data['line'], data['ch'])
+    )
+
+@app.route('/ycm/<process_uuid>/errors', methods=['POST'])
+def get_errors(process_uuid):
+    if process_uuid not in mapping:
+        return "Not found", 404
+    ycm = mapping[process_uuid]
+    data = request.get_json(force=True)
+    if 'patches' in data:
+        ycm.apply_patches(data['patches'])
+    ycm.parse(data['file'], data['line'], data['ch'])
+    return jsonify(
+        errors=ycm.parse(data['file'], data['line'], data['ch'])
     )
 
 

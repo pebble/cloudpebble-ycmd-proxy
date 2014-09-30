@@ -26,6 +26,8 @@ class YCM(object):
         self._secret = os.urandom(16)
         self._spawn()
         self._update_ping()
+        self._patch_id = 0
+        self._pending_patches = []
         self.wait()
 
     def _spawn(self):
@@ -42,13 +44,22 @@ class YCM(object):
             '--options_file', options_file
         ], cwd=self.root_dir)
 
-    def apply_patches(self, patch_sequence):
+    def apply_patches(self, patch_sequence, was_pending=False):
         self._update_ping()
         # TODO: optimisations, if we care.
         # We can keep the files in memory
         # A sequence of patches probably all apply to the same file. We can optimise around this.
         # But does it matter?
         for patch in patch_sequence:
+            if patch['sequence'] < self._patch_id:
+                continue
+            if patch['sequence'] > self._patch_id:
+                if not was_pending:
+                    self._pending_patches.append(self._patch_id)
+                    continue
+                else:
+                    break
+            self._patch_id += 1
             abs_path = self._abs_path(patch['filename'])
             with open(abs_path) as f:
                 lines = f.readlines()
@@ -58,14 +69,24 @@ class YCM(object):
                 # Including everything up to the start line
                 content = lines[:start['line']]
                 # Merge the start line, replacement, and end line into a single line
-                merged_line = lines[start['line']][:start['ch']] + "\n".join(patch['text']) + lines[end['line']][end['ch']:]
+                merged_line = ''
+                if len(lines) > start['line']:
+                    merged_line += lines[start['line']][:start['ch']]
+                merged_line += "\n".join(patch['text'])
+                if len(lines) > end['line']:
+                    merged_line += lines[end['line']][end['ch']:]
                 content.append(merged_line)
                 # Add the lines from the end through to the end.
-                content.extend(lines[end['line']+1:])
+                if len(lines) > end['line']+1:
+                    content.extend(lines[end['line']+1:])
 
             # Writeback.
             with open(abs_path, 'w') as f:
                 f.writelines(content)
+
+            # See if we can process the patch queue better now
+            if not was_pending:
+                self.apply_patches(sorted(self._pending_patches, key=lambda x: x['sequence']), True)
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
