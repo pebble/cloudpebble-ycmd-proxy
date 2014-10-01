@@ -27,8 +27,8 @@ class YCM(object):
         self._secret = os.urandom(16)
         self._spawn()
         self._update_ping()
-        self._patch_id = 0
-        self._pending_patches = []
+        self._patch_ids = {}
+        self._pending_patches = {}
         self.wait()
 
     def _spawn(self):
@@ -51,16 +51,23 @@ class YCM(object):
         # We can keep the files in memory
         # A sequence of patches probably all apply to the same file. We can optimise around this.
         # But does it matter?
-        for patch in patch_sequence:
-            if patch['sequence'] < self._patch_id:
+        for i, patch in enumerate(patch_sequence):
+            filename = patch['filename']
+            if filename not in self._patch_ids:
+                self._patch_ids[filename] = 0
+                self._pending_patches[filename] = []
+            patch_id = self._patch_ids[filename]
+            pending_patches = self._pending_patches[filename]
+            if patch['sequence'] < patch_id:
                 continue
-            if patch['sequence'] > self._patch_id:
+            if patch['sequence'] > patch_id:
                 if not was_pending:
-                    self._pending_patches.append(self._patch_id)
+                    pending_patches.append(patch)
                     continue
                 else:
+                    pending_patches.extend(patch_sequence[i:])
                     break
-            self._patch_id += 1
+            self._patch_ids[filename] += 1
             abs_path = self._abs_path(patch['filename'])
             with open(abs_path) as f:
                 lines = f.readlines()
@@ -87,7 +94,10 @@ class YCM(object):
 
             # See if we can process the patch queue better now
             if not was_pending:
-                self.apply_patches(sorted(self._pending_patches, key=lambda x: x['sequence']), True)
+                pending = pending_patches[:]
+                pending_patches[:] = []
+                self.apply_patches(sorted(pending, key=lambda x: x['sequence']), True)
+        print "remaining patches: %s" % ', '.join([x['sequence'] for x in self._pending_patches])
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
