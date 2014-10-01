@@ -61,8 +61,9 @@ class YCM(object):
 
             self._pending_patches[filename].append(patch)
 
-        for filename, pending in self._pending_patches.iteritems():
-            pending = sorted(pending, key=lambda x: x['sequence'])
+        for filename in self._pending_patches:
+            self._pending_patches[filename] = sorted(self._pending_patches[filename], key=lambda x: x['sequence'])
+            pending = self._pending_patches[filename]
 
             while len(pending) > 0 and pending[0]['sequence'] == self._patch_ids[filename]:
                 patch = pending.pop(0)
