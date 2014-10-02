@@ -176,9 +176,9 @@ def monitor_processes(mapping):
         print "process sweep collected %d instances" % len(to_kill)
 
 
-if __name__ == '__main__':
-    g = gevent.spawn(monitor_processes, mapping)
-    atexit.register(lambda: g.kill())
+g = gevent.spawn(monitor_processes, mapping)
+atexit.register(lambda: g.kill())
 
+if __name__ == '__main__':
     app.debug = settings.DEBUG
     app.run(settings.HOST, settings.PORT)
