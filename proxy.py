@@ -110,6 +110,20 @@ def get_errors(process_uuid):
     )
 
 
+@app.route('/ycm/<process_uuid>/goto', methods=['POST'])
+def go_to(process_uuid):
+    if process_uuid not in mapping:
+        return "Not found", 404
+    ycm = mapping[process_uuid]
+    data = request.get_json(force=True)
+    if 'patches' in data:
+        ycm.apply_patches(data['patches'])
+    ycm.parse(data['file'], data['line'], data['ch'])
+    return jsonify(
+        location=ycm.go_to(data['file'], data['line'], data['ch'])
+    )
+
+
 @app.route('/ycm/<process_uuid>/create', methods=['POST'])
 def create_file(process_uuid):
     if process_uuid not in mapping:

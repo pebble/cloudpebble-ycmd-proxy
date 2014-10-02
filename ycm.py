@@ -101,6 +101,36 @@ class YCM(object):
         path = self._abs_path(path)
         os.unlink(path)
 
+    def go_to(self, path, line, ch):
+        path = self._abs_path(path)
+        with open(path) as f:
+            request = {
+                'command_arguments': ['GoTo'],
+                'filepath': path,
+                'line_num': line + 1,
+                'column_num': ch + 1,
+                'file_data': {
+                    path: {
+                        'contents': f.read(),
+                        'filetypes': ['c'],
+                    }
+                }
+            }
+        result = self._request('run_completer_command', request)
+        if result.status_code != 200:
+            return None
+        location = result.json()
+        filepath = location['filepath']
+        if filepath.startswith(self.root_dir):
+            filepath = filepath[len(self.root_dir)+1:]
+        else:
+            return None
+        return {
+            'filepath': filepath,
+            'line': location['line_num'] - 1,
+            'ch': location['column_num'] - 1,
+        }
+
     def parse(self, filepath, line, ch):
         self._update_ping()
         path = self._abs_path(filepath)
