@@ -51,6 +51,7 @@ def FlagsForFile(filename, **kwargs):
             '-std=c11',
             '-x',
             'c',
+            '-m32',
             '-Wall',
             '-Wextra',
             '-Werror',
