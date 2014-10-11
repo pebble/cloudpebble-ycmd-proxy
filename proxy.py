@@ -9,6 +9,7 @@ import os.path
 import errno
 import atexit
 import gevent
+import traceback
 
 import settings
 from ycm import YCM
@@ -19,11 +20,12 @@ cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], re
 
 mapping = {}
 
+
 @app.route('/spinup', methods=['POST'])
 def spinup():
     content = request.get_json(force=True)
     root_dir = tempfile.mkdtemp()
-    print root_dir
+    print "spinup in %s" % root_dir
     # Dump all the files we should need.
     for path, content in content['files'].iteritems():
         abs_path = os.path.normpath(os.path.join(root_dir, path))
@@ -39,7 +41,7 @@ def spinup():
                 raise
         with open(abs_path, 'w') as f:
             f.write(content.encode('utf-8'))
-
+    print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
         f.write("""
@@ -70,15 +72,20 @@ def FlagsForFile(filename, **kwargs):
         'do_cache': True,
     }}
 """.format(sdk=settings.PEBBLE_SDK, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+    print "created settings files"
 
-    ycm = YCM(root_dir)
-    ycm.wait()
+    try:
+        ycm = YCM(root_dir)
+    except Exception as e:
+        print "Failed to spawn ycm with root_dir %s" % root_dir
+        print traceback.format_exc()
+        return jsonify(success=False, error=str(e)), 500
     ycm.apply_settings(settings_path)
 
     # Keep track of it
     this_uuid = str(uuid.uuid4())
     mapping[this_uuid] = YCM(root_dir)
-    print mapping
+    print "spinup complete; %s -> %s" % (this_uuid, root_dir)
     # victory!
     return jsonify(success=True, uuid=this_uuid)
 
