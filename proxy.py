@@ -38,7 +38,7 @@ def spinup():
             else:
                 raise
         with open(abs_path, 'w') as f:
-            f.write(content)
+            f.write(content.encode('utf-8'))
 
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:

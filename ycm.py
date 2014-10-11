@@ -71,7 +71,7 @@ class YCM(object):
                 abs_path = self._abs_path(patch['filename'])
 
                 with open(abs_path) as f:
-                    lines = f.readlines()
+                    lines = [x.decode('utf-8') for x in f.readlines()]
                     start = patch['start']
                     end = patch['end']
 
@@ -91,7 +91,7 @@ class YCM(object):
 
                 # Writeback.
                 with open(abs_path, 'w') as f:
-                    f.writelines(content)
+                    f.writelines([x.encode('utf-8') for x in content])
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
@@ -99,7 +99,7 @@ class YCM(object):
     def create_file(self, path, content):
         path = self._abs_path(path)
         with open(path, 'w') as f:
-            f.write(content)
+            f.write(content.encode('utf-8'))
 
     def delete_file(self, path):
         path = self._abs_path(path)
