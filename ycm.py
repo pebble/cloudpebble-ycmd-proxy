@@ -29,6 +29,7 @@ class YCM(object):
         self._update_ping()
         self._patch_ids = {}
         self._pending_patches = {}
+        self._pending_ids = {}
         self.wait()
 
     def _spawn(self):
@@ -52,14 +53,16 @@ class YCM(object):
         # A sequence of patches probably all apply to the same file. We can optimise around this.
         # But does it matter?
 
-
         for patch in patch_sequence:
             filename = patch['filename']
             if filename not in self._patch_ids:
                 self._patch_ids[filename] = 0
                 self._pending_patches[filename] = []
+                self._pending_ids[filename] = set()
 
-            self._pending_patches[filename].append(patch)
+            if patch['sequence'] not in self._pending_ids[filename]:
+                self._pending_patches[filename].append(patch)
+                self._pending_ids[filename].add(patch['sequence'])
 
         for filename in self._pending_patches:
             self._pending_patches[filename] = sorted(self._pending_patches[filename], key=lambda x: x['sequence'])
@@ -67,7 +70,7 @@ class YCM(object):
 
             while len(pending) > 0 and pending[0]['sequence'] == self._patch_ids[filename]:
                 patch = pending.pop(0)
-                self._patch_ids[filename] += 1
+                self._pending_ids[filename].remove(patch['sequence'])
                 abs_path = self._abs_path(patch['filename'])
 
                 with open(abs_path) as f:
@@ -92,6 +95,8 @@ class YCM(object):
                 # Writeback.
                 with open(abs_path, 'w') as f:
                     f.writelines([x.encode('utf-8') for x in content])
+
+                self._patch_ids[filename] += 1
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
