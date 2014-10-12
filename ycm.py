@@ -109,6 +109,10 @@ class YCM(object):
         self._request('load_extra_conf_file', {'filepath': file})
 
     def create_file(self, path, content):
+        if path in self._patch_ids:
+            del self._pending_patches[path]
+            del self._pending_ids[path]
+            del self._patch_ids[path]
         path = self._abs_path(path)
         with open(path, 'w') as f:
             f.write(content.encode('utf-8'))
