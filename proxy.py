@@ -173,10 +173,11 @@ def kill_completers():
 def monitor_processes(mapping):
     while True:
         print "process sweep running"
-        gevent.sleep(60)
+        gevent.sleep(20)
         to_kill = []
         for uuid, ycm in mapping.iteritems():
-            if not ycm.alive:
+            if not ycm.alive or ycm.max_pending_patch_count > 100:
+                print "killing %s (alive: %s, patches: %d)" % (uuid, ycm.alive, ycm.max_pending_patch_count)
                 ycm.close()
                 to_kill.append(uuid)
         for uuid in to_kill:

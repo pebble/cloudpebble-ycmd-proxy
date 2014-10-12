@@ -46,7 +46,14 @@ class YCM(object):
             '--options_file', options_file
         ], cwd=self.root_dir)
 
-    def apply_patches(self, patch_sequence, was_pending=False):
+    @property
+    def max_pending_patch_count(self):
+        try:
+            return max(map(len, self._pending_patches.itervalues()))
+        except ValueError:
+            return 0
+
+    def apply_patches(self, patch_sequence):
         self._update_ping()
         # TODO: optimisations, if we care.
         # We can keep the files in memory
