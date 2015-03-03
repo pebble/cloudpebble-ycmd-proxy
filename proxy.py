@@ -88,7 +88,7 @@ def FlagsForFile(filename, **kwargs):
         ycms.ycms['aplite'] = ycm
 
     if 'basalt' in platforms:
-        settings_path_basalt = os.path.join(root_dir, ".ycm_extra_conf_aplite.py")
+        settings_path_basalt = os.path.join(root_dir, ".ycm_extra_conf_basalt.py")
         with open(settings_path_basalt, "w") as f:
             f.write("""
 import os

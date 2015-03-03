@@ -7,6 +7,9 @@ class FileSync(object):
     def __init__(self, root_dir):
         assert isinstance(root_dir, basestring)
         self.root_dir = root_dir
+        # Make this to see if it gets happier.
+        with open(self.root_dir + '/.ycm_extra_conf.py', 'w') as f:
+            f.write('#')
         self._patch_ids = {}
         self._pending_patches = {}
 
