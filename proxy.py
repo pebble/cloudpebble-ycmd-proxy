@@ -141,14 +141,17 @@ def get_completions(process_uuid):
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
     completions = collections.OrderedDict()
+    print "get_completions:"
     for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
+        print platform, ycm
         ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
         platform_completions = ycm.get_completions(data['file'], data['line'], data['ch'])
+        print platform_completions
         for completion in platform_completions:
             if completion['insertion_text'] in completions:
                 continue
             completions[completion['insertion_text']] = completion
-
+    print completions
     return jsonify(
         completions=completions.values()
     )
@@ -163,8 +166,11 @@ def get_errors(process_uuid):
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
     errors = {}
+    print "get_errors:"
     for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
+        print platform, ycm
         result = ycm.parse(data['fil(Ie'], data['line'], data['ch'])
+        print result
         for error in result:
             error_key = (error['kind'], error['line_num'], error['text'])
             if error_key in errors:
@@ -240,7 +246,7 @@ def monitor_processes(mapping):
         gevent.sleep(60)
         to_kill = set()
         for uuid, ycms in mapping.iteritems():
-            for ycm in ycms:
+            for ycm in ycms.ycms:
                 if not ycm.alive:
                     ycm.close()
                     to_kill.add(uuid)
