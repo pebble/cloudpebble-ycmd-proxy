@@ -224,7 +224,7 @@ def delete_file(process_uuid):
 def ping(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    for ycm in mapping[process_uuid].ycms:
+    for ycm in mapping[process_uuid].ycms.itervalues():
         if not ycm.ping():
             return 'failed', 504
 
@@ -235,7 +235,7 @@ def ping(process_uuid):
 def kill_completers():
     global mapping
     for ycms in mapping.itervalues():
-        for ycm in ycms.ycms:
+        for ycm in ycms.ycms.itervalues():
             ycm.close()
     mapping = {}
 
@@ -246,7 +246,7 @@ def monitor_processes(mapping):
         gevent.sleep(60)
         to_kill = set()
         for uuid, ycms in mapping.iteritems():
-            for ycm in ycms.ycms:
+            for ycm in ycms.ycms.itervalues():
                 if not ycm.alive:
                     ycm.close()
                     to_kill.add(uuid)
