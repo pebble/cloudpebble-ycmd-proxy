@@ -53,65 +53,8 @@ def spinup():
 
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
-        f.write("""
-import os
-
-if os.environ['PLATFORM'] == 'basalt':
-    def FlagsForFile(filename, **kwargs):
-            return {{
-                'flags': [
-                    '-std=c11',
-                    '-x',
-                    'c',
-                    '-Wall',
-                    '-Wextra',
-                    '-Werror',
-                    '-Wno-unused-parameter',
-                    '-Wno-error=unused-function',
-                    '-Wno-error=unused-variable',
-                    '-I{sdk}/Pebble/aplite/include',
-                    '-I{here}/build',
-                    '-I{here}',
-                    '-I{here}/build/src',
-                    '-I{here}/src',
-                    '-isystem',
-                    '{stdlib}',
-                    '-DRELEASE',
-                    '-DPBL_PLATFORM_BASALT',
-                    '-DPBL_COLOR',
-                    '-D_TIME_H',
-                ],
-                'do_cache': True,
-            }}
-elif os.environ['PLATFORM'] == 'aplite':
-    def FlagsForFile(filename, **kwargs):
-        return {{
-            'flags': [
-                '-std=c11',
-                '-x',
-                'c',
-                '-Wall',
-                '-Wextra',
-                '-Werror',
-                '-Wno-unused-parameter',
-                '-Wno-error=unused-function',
-                '-Wno-error=unused-variable',
-                '-I{sdk}/Pebble/aplite/include',
-                '-I{here}/build',
-                '-I{here}',
-                '-I{here}/build/src',
-                '-I{here}/src',
-                '-isystem',
-                '{stdlib}',
-                '-DRELEASE',
-                '-DPBL_PLATFORM_APLITE',
-                '-DPBL_BW',
-            ],
-            'do_cache': True,
-        }}
-else:
-    raise Exception("Need a platform.")
-        """.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+        with open(os.path.dirname(__file__) + '/ycm_extra_conf.py') as template:
+            f.write(template.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     if 'aplite' in platforms:
         ycm = YCM(filesync, 'aplite')
