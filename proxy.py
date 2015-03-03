@@ -51,7 +51,8 @@ def spinup():
     filesync = FileSync(root_dir)
     ycms = YCMHolder(filesync=filesync, ycms={})
     if 'aplite' in platforms:
-        settings_path_aplite = os.path.join(root_dir, ".ycm_extra_conf_aplite.py")
+        os.mkdir(root_dir + '.ycm-aplite')
+        settings_path_aplite = os.path.join(root_dir, ".ycm-aplite/.ycm_extra_conf.py")
         with open(settings_path_aplite, "w") as f:
             f.write("""
 import os
@@ -88,7 +89,8 @@ def FlagsForFile(filename, **kwargs):
         ycms.ycms['aplite'] = ycm
 
     if 'basalt' in platforms:
-        settings_path_basalt = os.path.join(root_dir, ".ycm_extra_conf_basalt.py")
+        os.mkdir(root_dir + '.ycm-basalt')
+        settings_path_basalt = os.path.join(root_dir, ".ycm-basalt/.ycm_extra_conf.py")
         with open(settings_path_basalt, "w") as f:
             f.write("""
 import os
