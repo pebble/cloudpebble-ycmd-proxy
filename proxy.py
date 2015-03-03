@@ -30,7 +30,7 @@ CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_te
 def spinup():
     content = request.get_json(force=True)
     root_dir = tempfile.mkdtemp()
-    platforms = set(content.get('platforms', 'aplite'))
+    platforms = set(content.get('platforms', ['aplite']))
     print root_dir
     # Dump all the files we should need.
     for path, content in content['files'].iteritems():
