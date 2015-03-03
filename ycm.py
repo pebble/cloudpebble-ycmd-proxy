@@ -22,9 +22,10 @@ __author__ = 'katharine'
 
 
 class YCM(object):
-    def __init__(self, files):
+    def __init__(self, files, platform='aplite'):
         assert isinstance(files, FileSync)
         self.files = files
+        self.platform = platform
         self._port = self._get_port()
         self._secret = os.urandom(16)
         self._spawn()
@@ -38,12 +39,14 @@ class YCM(object):
             ycmd_settings['confirm_extra_conf'] = 0
             json.dump(ycmd_settings, f)
             options_file = f.name
+        env = os.environ.copy()
+        env['PLATFORM'] = self.platform
         self._process = subprocess.Popen([
             settings.YCMD_BINARY,
             '--idle_suicide_seconds', '700',
             '--port', str(self._port),
             '--options_file', options_file
-        ], cwd=self.files.root_dir)
+        ], cwd=self.files.root_dir, env=env)
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})

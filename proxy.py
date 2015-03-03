@@ -50,80 +50,79 @@ def spinup():
 
     filesync = FileSync(root_dir)
     ycms = YCMHolder(filesync=filesync, ycms={})
-    if 'aplite' in platforms:
-        os.mkdir(root_dir + '/.ycm-aplite')
-        settings_path_aplite = os.path.join(root_dir, ".ycm-aplite/.ycm_extra_conf.py")
-        with open(settings_path_aplite, "w") as f:
-            f.write("""
+
+    settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
+    with open(settings_path, "w") as f:
+        f.write("""
 import os
 
-def FlagsForFile(filename, **kwargs):
-    return {{
-        'flags': [
-            '-std=c11',
-            '-x',
-            'c',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-Wno-unused-parameter',
-            '-Wno-error=unused-function',
-            '-Wno-error=unused-variable',
-            '-I{sdk}/Pebble/aplite/include',
-            '-I{here}/build',
-            '-I{here}',
-            '-I{here}/build/src',
-            '-I{here}/src',
-            '-isystem',
-            '{stdlib}',
-            '-DRELEASE',
-            '-DPBL_PLATFORM_APLITE',
-            '-DPBL_BW',
-        ],
-        'do_cache': True,
-    }}
-            """.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
-        ycm = YCM(filesync)
+if os.environ['PLATFORM'] == 'basalt':
+    def FlagsForFile(filename, **kwargs):
+            return {{
+                'flags': [
+                    '-std=c11',
+                    '-x',
+                    'c',
+                    '-Wall',
+                    '-Wextra',
+                    '-Werror',
+                    '-Wno-unused-parameter',
+                    '-Wno-error=unused-function',
+                    '-Wno-error=unused-variable',
+                    '-I{sdk}/Pebble/aplite/include',
+                    '-I{here}/build',
+                    '-I{here}',
+                    '-I{here}/build/src',
+                    '-I{here}/src',
+                    '-isystem',
+                    '{stdlib}',
+                    '-DRELEASE',
+                    '-DPBL_PLATFORM_BASALT',
+                    '-DPBL_COLOR',
+                    '-D_TIME_H',
+                ],
+                'do_cache': True,
+            }}
+elif os.environ['PLATFORM'] == 'aplite':
+    def FlagsForFile(filename, **kwargs):
+        return {{
+            'flags': [
+                '-std=c11',
+                '-x',
+                'c',
+                '-Wall',
+                '-Wextra',
+                '-Werror',
+                '-Wno-unused-parameter',
+                '-Wno-error=unused-function',
+                '-Wno-error=unused-variable',
+                '-I{sdk}/Pebble/aplite/include',
+                '-I{here}/build',
+                '-I{here}',
+                '-I{here}/build/src',
+                '-I{here}/src',
+                '-isystem',
+                '{stdlib}',
+                '-DRELEASE',
+                '-DPBL_PLATFORM_APLITE',
+                '-DPBL_BW',
+            ],
+            'do_cache': True,
+        }}
+else:
+    raise Exception("Need a platform.")
+        """.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+
+    if 'aplite' in platforms:
+        ycm = YCM(filesync, 'aplite')
         ycm.wait()
-        ycm.apply_settings(settings_path_aplite)
+        ycm.apply_settings(settings_path)
         ycms.ycms['aplite'] = ycm
 
     if 'basalt' in platforms:
-        os.mkdir(root_dir + '/.ycm-basalt')
-        settings_path_basalt = os.path.join(root_dir, ".ycm-basalt/.ycm_extra_conf.py")
-        with open(settings_path_basalt, "w") as f:
-            f.write("""
-import os
-
-def FlagsForFile(filename, **kwargs):
-    return {{
-        'flags': [
-            '-std=c11',
-            '-x',
-            'c',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-Wno-unused-parameter',
-            '-Wno-error=unused-function',
-            '-Wno-error=unused-variable',
-            '-I{sdk}/Pebble/aplite/include',
-            '-I{here}/build',
-            '-I{here}',
-            '-I{here}/build/src',
-            '-I{here}/src',
-            '-isystem',
-            '{stdlib}',
-            '-DRELEASE',
-            '-DPBL_PLATFORM_BASALT',
-            '-DPBL_COLOR',
-        ],
-        'do_cache': True,
-    }}
-            """.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
-        ycm = YCM(filesync)
+        ycm = YCM(filesync, 'basalt')
         ycm.wait()
-        ycm.apply_settings(settings_path_basalt)
+        ycm.apply_settings(settings_path)
         ycms.ycms['basalt'] = ycm
 
     # Keep track of it
