@@ -9,8 +9,9 @@ class FileSync(object):
         self.root_dir = root_dir
         self._patch_ids = {}
         self._pending_patches = {}
+        self._pending_ids = {}
 
-    def apply_patches(self, patch_sequence, was_pending=False):
+    def apply_patches(self, patch_sequence):
         # TODO: optimisations, if we care.
         # We can keep the files in memory
         # A sequence of patches probably all apply to the same file. We can optimise around this.
@@ -21,8 +22,11 @@ class FileSync(object):
             if filename not in self._patch_ids:
                 self._patch_ids[filename] = 0
                 self._pending_patches[filename] = []
+                self._pending_ids[filename] = set()
 
-            self._pending_patches[filename].append(patch)
+            if patch['sequence'] not in self._pending_ids[filename]:
+                self._pending_patches[filename].append(patch)
+                self._pending_ids[filename].add(patch['sequence'])
 
         for filename in self._pending_patches:
             self._pending_patches[filename] = sorted(self._pending_patches[filename], key=lambda x: x['sequence'])
@@ -30,11 +34,11 @@ class FileSync(object):
 
             while len(pending) > 0 and pending[0]['sequence'] == self._patch_ids[filename]:
                 patch = pending.pop(0)
-                self._patch_ids[filename] += 1
-                abs_path = self.abs_path(patch['filename'])
+                self._pending_ids[filename].remove(patch['sequence'])
+                abs_path = self._abs_path(patch['filename'])
 
                 with open(abs_path) as f:
-                    lines = f.readlines()
+                    lines = [x.decode('utf-8') for x in f.readlines()]
                     start = patch['start']
                     end = patch['end']
 
@@ -54,8 +58,16 @@ class FileSync(object):
 
                 # Writeback.
                 with open(abs_path, 'w') as f:
-                    f.writelines(content)
-                    f.flush()
+                    f.writelines([x.encode('utf-8') for x in content])
+
+                self._patch_ids[filename] += 1
+
+    @property
+    def max_pending_patch_count(self):
+        try:
+            return max(map(len, self._pending_patches.itervalues()))
+        except ValueError:
+            return 0
 
     def create_file(self, path, content):
         path = self.abs_path(path)
