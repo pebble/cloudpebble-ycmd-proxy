@@ -121,7 +121,7 @@ def get_errors(process_uuid):
         if result is None:
             continue
         for error in result:
-            error_key = (error['kind'], error['line_num'], error['text'])
+            error_key = (error['kind'], error['location']['line_num'], error['text'])
             if error_key in errors:
                 errors[error_key]['platforms'].append(platform)
             else:
