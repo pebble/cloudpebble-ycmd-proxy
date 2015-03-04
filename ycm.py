@@ -43,7 +43,7 @@ class YCM(object):
         env['PLATFORM'] = self.platform
         self._process = subprocess.Popen([
             settings.YCMD_BINARY,
-            '--idle_suicide_seconds', '700',
+            '--idle_suicide_seconds', '300',
             '--port', str(self._port),
             '--options_file', options_file
         ], cwd=self.files.root_dir, env=env)
@@ -170,11 +170,18 @@ class YCM(object):
 
     @property
     def alive(self):
-        return time.time() < self._last_ping + 600
+        return time.time() < self._last_ping + 280
 
     def close(self):
         print "terminating server"
-        self._process.terminate()
+        try:
+            self._process.terminate()
+        except Exception as e:
+            print "Error terminating process: %s" % e
+        try:
+            shutil.rmtree(self.files.root_dir)
+        except:
+            pass
 
     @staticmethod
     def _get_port():

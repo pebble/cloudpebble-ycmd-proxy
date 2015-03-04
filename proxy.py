@@ -10,6 +10,7 @@ import errno
 import atexit
 import gevent
 import collections
+import traceback
 
 import settings
 from ycm import YCM
@@ -25,13 +26,12 @@ mapping = {}
 YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
 CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
-
 @app.route('/spinup', methods=['POST'])
 def spinup():
     content = request.get_json(force=True)
     root_dir = tempfile.mkdtemp()
     platforms = set(content.get('platforms', ['aplite']))
-    print root_dir
+    print "spinup in %s" % root_dir
     # Dump all the files we should need.
     for path, content in content['files'].iteritems():
         abs_path = os.path.normpath(os.path.join(root_dir, path))
@@ -46,32 +46,39 @@ def spinup():
             else:
                 raise
         with open(abs_path, 'w') as f:
-            f.write(content)
+            f.write(content.encode('utf-8'))
 
     filesync = FileSync(root_dir)
     ycms = YCMHolder(filesync=filesync, ycms={})
 
+    print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
         with open(os.path.dirname(__file__) + '/ycm_extra_conf.py') as template:
             f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
-    if 'aplite' in platforms:
-        ycm = YCM(filesync, 'aplite')
-        ycm.wait()
-        ycm.apply_settings(settings_path)
-        ycms.ycms['aplite'] = ycm
+    try:
+        if 'aplite' in platforms:
+            ycm = YCM(filesync, 'aplite')
+            ycm.wait()
+            ycm.apply_settings(settings_path)
+            ycms.ycms['aplite'] = ycm
 
-    if 'basalt' in platforms:
-        ycm = YCM(filesync, 'basalt')
-        ycm.wait()
-        ycm.apply_settings(settings_path)
-        ycms.ycms['basalt'] = ycm
+        if 'basalt' in platforms:
+            ycm = YCM(filesync, 'basalt')
+            ycm.wait()
+            ycm.apply_settings(settings_path)
+            ycms.ycms['basalt'] = ycm
+    except Exception as e:
+        print "Failed to spawn ycm with root_dir %s" % root_dir
+        print traceback.format_exc()
+        return jsonify(success=False, error=str(e)), 500
 
     # Keep track of it
     this_uuid = str(uuid.uuid4())
     mapping[this_uuid] = ycms
     print mapping
+    print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
     return jsonify(success=True, uuid=this_uuid)
 
@@ -192,13 +199,14 @@ def kill_completers():
 def monitor_processes(mapping):
     while True:
         print "process sweep running"
-        gevent.sleep(60)
+        gevent.sleep(20)
         to_kill = set()
         for uuid, ycms in mapping.iteritems():
             for ycm in ycms.ycms.itervalues():
-                if not ycm.alive:
+                if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
+                    print "killing %s (alive: %s, patches: %d)" % (uuid, ycm.alive, ycm.max_pending_patch_count)
                     ycm.close()
-                    to_kill.add(uuid)
+                    to_kill.append(uuid)
         for uuid in to_kill:
             del mapping[uuid]
         print "process sweep collected %d instances" % len(to_kill)
