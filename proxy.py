@@ -126,7 +126,7 @@ def get_errors(process_uuid):
                 errors[error_key]['platforms'].append(platform)
             else:
                 error['platforms'] = [platform]
-                errors['error_key'] = error
+                errors[error_key] = error
 
     return jsonify(
         errors=errors.values()
