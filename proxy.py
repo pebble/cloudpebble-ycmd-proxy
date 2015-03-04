@@ -54,7 +54,7 @@ def spinup():
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
         with open(os.path.dirname(__file__) + '/ycm_extra_conf.py') as template:
-            f.write(template.format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+            f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     if 'aplite' in platforms:
         ycm = YCM(filesync, 'aplite')
