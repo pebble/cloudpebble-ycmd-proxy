@@ -23,7 +23,6 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-DRELEASE',
                 '-DPBL_PLATFORM_BASALT',
                 '-DPBL_COLOR',
-                '-D_TIME_H_',
             ],
             'do_cache': True,
         }}
