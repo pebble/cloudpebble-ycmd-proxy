@@ -16,20 +16,20 @@ import os
 
 from symbol_blacklist import is_valid_symbol
 import settings
+from filesync import FileSync
 
 __author__ = 'katharine'
 
 
 class YCM(object):
-    def __init__(self, root_dir):
-        self.root_dir = root_dir
+    def __init__(self, files, platform='aplite'):
+        assert isinstance(files, FileSync)
+        self.files = files
+        self.platform = platform
         self._port = self._get_port()
         self._secret = os.urandom(16)
         self._spawn()
         self._update_ping()
-        self._patch_ids = {}
-        self._pending_patches = {}
-        self._pending_ids = {}
         self.wait()
 
     def _spawn(self):
@@ -39,90 +39,20 @@ class YCM(object):
             ycmd_settings['confirm_extra_conf'] = 0
             json.dump(ycmd_settings, f)
             options_file = f.name
+        env = os.environ.copy()
+        env['PLATFORM'] = self.platform
         self._process = subprocess.Popen([
             settings.YCMD_BINARY,
             '--idle_suicide_seconds', '300',
             '--port', str(self._port),
             '--options_file', options_file
-        ], cwd=self.root_dir)
-
-    @property
-    def max_pending_patch_count(self):
-        try:
-            return max(map(len, self._pending_patches.itervalues()))
-        except ValueError:
-            return 0
-
-    def apply_patches(self, patch_sequence):
-        self._update_ping()
-        # TODO: optimisations, if we care.
-        # We can keep the files in memory
-        # A sequence of patches probably all apply to the same file. We can optimise around this.
-        # But does it matter?
-
-        for patch in patch_sequence:
-            filename = patch['filename']
-            if filename not in self._patch_ids:
-                self._patch_ids[filename] = 0
-                self._pending_patches[filename] = []
-                self._pending_ids[filename] = set()
-
-            if patch['sequence'] not in self._pending_ids[filename]:
-                self._pending_patches[filename].append(patch)
-                self._pending_ids[filename].add(patch['sequence'])
-
-        for filename in self._pending_patches:
-            self._pending_patches[filename] = sorted(self._pending_patches[filename], key=lambda x: x['sequence'])
-            pending = self._pending_patches[filename]
-
-            while len(pending) > 0 and pending[0]['sequence'] == self._patch_ids[filename]:
-                patch = pending.pop(0)
-                self._pending_ids[filename].remove(patch['sequence'])
-                abs_path = self._abs_path(patch['filename'])
-
-                with open(abs_path) as f:
-                    lines = [x.decode('utf-8') for x in f.readlines()]
-                    start = patch['start']
-                    end = patch['end']
-
-                    # Including everything up to the start line
-                    content = lines[:start['line']]
-                    # Merge the start line, replacement, and end line into a single line
-                    merged_line = ''
-                    if len(lines) > start['line']:
-                        merged_line += lines[start['line']][:start['ch']]
-                    merged_line += "\n".join(patch['text'])
-                    if len(lines) > end['line']:
-                        merged_line += lines[end['line']][end['ch']:]
-                    content.append(merged_line)
-                    # Add the lines from the end through to the end.
-                    if len(lines) > end['line']+1:
-                        content.extend(lines[end['line']+1:])
-
-                # Writeback.
-                with open(abs_path, 'w') as f:
-                    f.writelines([x.encode('utf-8') for x in content])
-
-                self._patch_ids[filename] += 1
+        ], cwd=self.files.root_dir, env=env)
 
     def apply_settings(self, file):
         self._request('load_extra_conf_file', {'filepath': file})
 
-    def create_file(self, path, content):
-        if path in self._patch_ids:
-            del self._pending_patches[path]
-            del self._pending_ids[path]
-            del self._patch_ids[path]
-        path = self._abs_path(path)
-        with open(path, 'w') as f:
-            f.write(content.encode('utf-8'))
-
-    def delete_file(self, path):
-        path = self._abs_path(path)
-        os.unlink(path)
-
     def go_to(self, path, line, ch):
-        path = self._abs_path(path)
+        path = self.files.abs_path(path)
         with open(path) as f:
             request = {
                 'command_arguments': ['GoTo'],
@@ -141,8 +71,8 @@ class YCM(object):
             return None
         location = result.json()
         filepath = location['filepath']
-        if filepath.startswith(self.root_dir):
-            filepath = filepath[len(self.root_dir)+1:]
+        if filepath.startswith(self.files.root_dir):
+            filepath = filepath[len(self.files.root_dir)+1:]
         else:
             return None
         return {
@@ -153,7 +83,7 @@ class YCM(object):
 
     def parse(self, filepath, line, ch):
         self._update_ping()
-        path = self._abs_path(filepath)
+        path = self.files.abs_path(filepath)
         with open(path) as f:
             request = {
                 'event_name': 'FileReadyToParse',
@@ -182,7 +112,7 @@ class YCM(object):
 
     def get_completions(self, filepath, line, ch):
         self._update_ping()
-        path = self._abs_path(filepath)
+        path = self.files.abs_path(filepath)
         with open(path) as f:
             request = {
                 'column_num': ch + 1,
@@ -198,7 +128,6 @@ class YCM(object):
             }
 
         result = self._request("completions", request)
-        print result.text
         if result.status_code == 200:
             response = result.json()
             completions = map(self._clean_symbol, filter(is_valid_symbol, response['completions'])[:10])
@@ -207,7 +136,7 @@ class YCM(object):
                 'completion_start_column': response['completion_start_column'],
             }
         else:
-            return {'completions': []}
+            return None
 
     def wait(self):
         while True:
@@ -226,12 +155,6 @@ class YCM(object):
 
     def _hmac(self, body):
         return base64.b64encode(hmac.new(self._secret, body, hashlib.sha256).hexdigest())
-
-    def _abs_path(self, path):
-        abs_path = os.path.normpath(os.path.join(self.root_dir, path))
-        if not abs_path.startswith(self.root_dir):
-            raise Exception("Bad path")
-        return abs_path
 
     def _request(self, endpoint, data=None):
         body = json.dumps(data)
@@ -255,7 +178,7 @@ class YCM(object):
         except Exception as e:
             print "Error terminating process: %s" % e
         try:
-            shutil.rmtree(self.root_dir)
+            shutil.rmtree(self.files.root_dir)
         except:
             pass
 

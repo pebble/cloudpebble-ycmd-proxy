@@ -9,10 +9,12 @@ import os.path
 import errno
 import atexit
 import gevent
+import collections
 import traceback
 
 import settings
 from ycm import YCM
+from filesync import FileSync
 
 app = Flask(__name__)
 
@@ -21,10 +23,14 @@ cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], re
 mapping = {}
 
 
+YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
+CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
+
 @app.route('/spinup', methods=['POST'])
 def spinup():
     content = request.get_json(force=True)
     root_dir = tempfile.mkdtemp()
+    platforms = set(content.get('platforms', ['aplite']))
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
     for path, content in content['files'].iteritems():
@@ -41,51 +47,38 @@ def spinup():
                 raise
         with open(abs_path, 'w') as f:
             f.write(content.encode('utf-8'))
+
+    filesync = FileSync(root_dir)
+    ycms = YCMHolder(filesync=filesync, ycms={})
+
     print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
-        f.write("""
-import os
-
-def FlagsForFile(filename, **kwargs):
-    return {{
-        'flags': [
-            '-std=c11',
-            '-x',
-            'c',
-            '-m32',
-            '-Wall',
-            '-Wextra',
-            '-Werror',
-            '-Wno-unused-parameter',
-            '-Wno-error=unused-function',
-            '-Wno-error=unused-variable',
-            '-I{sdk}/Pebble/include',
-            '-I{here}/build',
-            '-I{here}',
-            '-I{here}/build/src',
-            '-I{here}/src',
-            '-isystem',
-            '{stdlib}',
-            '-DRELEASE',
-        ],
-        'do_cache': True,
-    }}
-""".format(sdk=settings.PEBBLE_SDK, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
-    print "created settings files"
+        with open(os.path.dirname(os.path.abspath(__file__)) + '/ycm_extra_conf.py') as template:
+            f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
-        ycm = YCM(root_dir)
+        if 'aplite' in platforms:
+            ycm = YCM(filesync, 'aplite')
+            ycm.wait()
+            ycm.apply_settings(settings_path)
+            ycms.ycms['aplite'] = ycm
+
+        if 'basalt' in platforms:
+            ycm = YCM(filesync, 'basalt')
+            ycm.wait()
+            ycm.apply_settings(settings_path)
+            ycms.ycms['basalt'] = ycm
     except Exception as e:
         print "Failed to spawn ycm with root_dir %s" % root_dir
         print traceback.format_exc()
         return jsonify(success=False, error=str(e)), 500
-    ycm.apply_settings(settings_path)
 
     # Keep track of it
     this_uuid = str(uuid.uuid4())
-    mapping[this_uuid] = YCM(root_dir)
-    print "spinup complete; %s -> %s" % (this_uuid, root_dir)
+    mapping[this_uuid] = ycms
+    print mapping
+    print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
     return jsonify(success=True, uuid=this_uuid)
 
@@ -94,13 +87,25 @@ def FlagsForFile(filename, **kwargs):
 def get_completions(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    ycm = mapping[process_uuid]
+    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
     if 'patches' in data:
-        ycm.apply_patches(data['patches'])
-    ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
+        ycms.filesync.apply_patches(data['patches'])
+    completions = collections.OrderedDict()
+    completion_start_column = None
+    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
+        ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
+        platform_completions = ycm.get_completions(data['file'], data['line'], data['ch'])
+        if platform_completions is not None:
+            completion_start_column = platform_completions['completion_start_column']
+            for completion in platform_completions['completions']:
+                if completion['insertion_text'] in completions:
+                    continue
+                completions[completion['insertion_text']] = completion
+
     return jsonify(
-        completions=ycm.get_completions(data['file'], data['line'], data['ch'])
+        completions=completions.values(),
+        start_column=completion_start_column,
     )
 
 
@@ -108,13 +113,25 @@ def get_completions(process_uuid):
 def get_errors(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    ycm = mapping[process_uuid]
+    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
     if 'patches' in data:
-        ycm.apply_patches(data['patches'])
-    ycm.parse(data['file'], data['line'], data['ch'])
+        ycms.filesync.apply_patches(data['patches'])
+    errors = {}
+    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
+        result = ycm.parse(data['file'], data['line'], data['ch'])
+        if result is None:
+            continue
+        for error in result:
+            error_key = (error['kind'], error['location']['line_num'], error['text'])
+            if error_key in errors:
+                errors[error_key]['platforms'].append(platform)
+            else:
+                error['platforms'] = [platform]
+                errors[error_key] = error
+
     return jsonify(
-        errors=ycm.parse(data['file'], data['line'], data['ch'])
+        errors=errors.values()
     )
 
 
@@ -122,23 +139,25 @@ def get_errors(process_uuid):
 def go_to(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    ycm = mapping[process_uuid]
+    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
     if 'patches' in data:
-        ycm.apply_patches(data['patches'])
-    ycm.parse(data['file'], data['line'], data['ch'])
-    return jsonify(
-        location=ycm.go_to(data['file'], data['line'], data['ch'])
-    )
+        ycms.filesync.apply_patches(data['patches'])
+    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
+        ycm.parse(data['file'], data['line'], data['ch'])
+        result = ycm.go_to(data['file'], data['line'], data['ch'])
+        if result is not None:
+            return jsonify(location=result)
+    return jsonify(location=None)
 
 
 @app.route('/ycm/<process_uuid>/create', methods=['POST'])
 def create_file(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    ycm = mapping[process_uuid]
+    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    ycm.create_file(data['filename'], data['content'])
+    ycms.filesync.create_file(data['filename'], data['content'])
     return 'ok'
 
 
@@ -146,9 +165,9 @@ def create_file(process_uuid):
 def delete_file(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    ycm = mapping[process_uuid]
+    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    ycm.delete_file(data['filename'])
+    ycms.filesync.delete_file(data['filename'])
     return 'ok'
 
 
@@ -156,17 +175,19 @@ def delete_file(process_uuid):
 def ping(process_uuid):
     if process_uuid not in mapping:
         return "Not found", 404
-    if mapping[process_uuid].ping():
-        return 'ok'
-    else:
-        return 'failed', 503
+    for ycm in mapping[process_uuid].ycms.itervalues():
+        if not ycm.ping():
+            return 'failed', 504
+
+    return 'ok'
 
 
 @atexit.register
 def kill_completers():
     global mapping
-    for ycm in mapping.itervalues():
-        ycm.close()
+    for ycms in mapping.itervalues():
+        for ycm in ycms.ycms.itervalues():
+            ycm.close()
     mapping = {}
 
 
@@ -174,12 +195,13 @@ def monitor_processes(mapping):
     while True:
         print "process sweep running"
         gevent.sleep(20)
-        to_kill = []
-        for uuid, ycm in mapping.iteritems():
-            if not ycm.alive or ycm.max_pending_patch_count > 100:
-                print "killing %s (alive: %s, patches: %d)" % (uuid, ycm.alive, ycm.max_pending_patch_count)
-                ycm.close()
-                to_kill.append(uuid)
+        to_kill = set()
+        for uuid, ycms in mapping.iteritems():
+            for platform, ycm in ycms.ycms.iteritems():
+                if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
+                    print "killing %s:%s (alive: %s, patches: %d)" % (uuid, platform, ycm.alive, ycms.filesync.max_pending_patch_count)
+                    ycm.close()
+                    to_kill.append(uuid)
         for uuid in to_kill:
             del mapping[uuid]
         print "process sweep collected %d instances" % len(to_kill)
