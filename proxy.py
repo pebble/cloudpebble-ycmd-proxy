@@ -202,9 +202,9 @@ def monitor_processes(mapping):
         gevent.sleep(20)
         to_kill = set()
         for uuid, ycms in mapping.iteritems():
-            for ycm in ycms.ycms.itervalues():
+            for platform, ycm in ycms.ycms.iteritems():
                 if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
-                    print "killing %s (alive: %s, patches: %d)" % (uuid, ycm.alive, ycm.max_pending_patch_count)
+                    print "killing %s:%s (alive: %s, patches: %d)" % (uuid, platform, ycm.alive, ycms.filesync.max_pending_patch_count)
                     ycm.close()
                     to_kill.append(uuid)
         for uuid in to_kill:
