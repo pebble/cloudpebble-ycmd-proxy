@@ -98,13 +98,14 @@ def get_completions(process_uuid):
         print platform, ycm
         ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
         platform_completions = ycm.get_completions(data['file'], data['line'], data['ch'])
-        completion_start_column = platform_completions['completion_start_column']
-        print platform_completions
-        for completion in platform_completions['completions']:
-            if completion['insertion_text'] in completions:
-                continue
-            completions[completion['insertion_text']] = completion
-    print completions
+        if platform_completions is not None:
+            completion_start_column = platform_completions['completion_start_column']
+            print platform_completions
+            for completion in platform_completions['completions']:
+                if completion['insertion_text'] in completions:
+                    continue
+                completions[completion['insertion_text']] = completion
+
     return jsonify(
         completions=completions.values(),
         start_column=completion_start_column,

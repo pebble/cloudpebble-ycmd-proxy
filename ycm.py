@@ -128,7 +128,6 @@ class YCM(object):
             }
 
         result = self._request("completions", request)
-        print result.text
         if result.status_code == 200:
             response = result.json()
             completions = map(self._clean_symbol, filter(is_valid_symbol, response['completions'])[:10])
@@ -137,7 +136,7 @@ class YCM(object):
                 'completion_start_column': response['completion_start_column'],
             }
         else:
-            return {'completions': []}
+            return None
 
     def wait(self):
         while True:
