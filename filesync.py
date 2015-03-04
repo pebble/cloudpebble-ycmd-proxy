@@ -35,7 +35,7 @@ class FileSync(object):
             while len(pending) > 0 and pending[0]['sequence'] == self._patch_ids[filename]:
                 patch = pending.pop(0)
                 self._pending_ids[filename].remove(patch['sequence'])
-                abs_path = self._abs_path(patch['filename'])
+                abs_path = self.abs_path(patch['filename'])
 
                 with open(abs_path) as f:
                     lines = [x.decode('utf-8') for x in f.readlines()]
