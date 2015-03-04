@@ -54,7 +54,7 @@ def spinup():
     print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
     with open(settings_path, "w") as f:
-        with open(os.path.dirname(__file__) + '/ycm_extra_conf.py') as template:
+        with open(os.path.dirname(os.path.abspath(__file__)) + '/ycm_extra_conf.py') as template:
             f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
