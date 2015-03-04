@@ -13,7 +13,7 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-Wno-unused-parameter',
                 '-Wno-error=unused-function',
                 '-Wno-error=unused-variable',
-                '-I{sdk}/Pebble/aplite/include',
+                '-I{sdk}/Pebble/basalt/include',
                 '-I{here}/build',
                 '-I{here}',
                 '-I{here}/build/src',
@@ -23,6 +23,7 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-DRELEASE',
                 '-DPBL_PLATFORM_BASALT',
                 '-DPBL_COLOR',
+                '-D_TIME_H_',
             ],
             'do_cache': True,
         }}
