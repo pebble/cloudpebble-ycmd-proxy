@@ -118,6 +118,8 @@ def get_errors(process_uuid):
         print platform, ycm
         result = ycm.parse(data['file'], data['line'], data['ch'])
         print result
+        if result is None:
+            continue
         for error in result:
             error_key = (error['kind'], error['line_num'], error['text'])
             if error_key in errors:
