@@ -31,6 +31,7 @@ def spinup():
     content = request.get_json(force=True)
     root_dir = tempfile.mkdtemp()
     platforms = set(content.get('platforms', ['aplite']))
+    sdk_version = content.get('sdk', '2')
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
     for path, content in content['files'].iteritems():
@@ -53,8 +54,14 @@ def spinup():
 
     print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
+
+    conf_mapping = {
+        '2': 'ycm_extra_conf_sdk2.py',
+        '3': 'ycm_extra_conf_sdk3.py',
+    }
+
     with open(settings_path, "w") as f:
-        with open(os.path.dirname(os.path.abspath(__file__)) + '/ycm_extra_conf.py') as template:
+        with open(os.path.dirname(os.path.abspath(__file__)) + '/ycm_conf/%s' % conf_mapping[sdk_version]) as template:
             f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
