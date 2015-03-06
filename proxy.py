@@ -61,7 +61,7 @@ def spinup():
     }
 
     with open(settings_path, "w") as f:
-        with open(os.path.dirname(os.path.abspath(__file__)) + '/ycm_conf/%s' % conf_mapping[sdk_version]) as template:
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf', conf_mapping[sdk_version])) as template:
             f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
