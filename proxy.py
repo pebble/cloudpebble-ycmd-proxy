@@ -59,10 +59,14 @@ def spinup():
         '2': 'ycm_extra_conf_sdk2.py',
         '3': 'ycm_extra_conf_sdk3.py',
     }
+    sdk_mapping = {
+        '2': settings.PEBBLE_SDK2,
+        '3': settings.PEBBLE_SDK3,
+    }
 
     with open(settings_path, "w") as f:
         with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf', conf_mapping[sdk_version])) as template:
-            f.write(template.read().format(sdk=settings.PEBBLE_SDK3, here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+            f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
         if 'aplite' in platforms:
