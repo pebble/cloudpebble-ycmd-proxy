@@ -2,223 +2,82 @@
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 from flask import Flask, request, jsonify
 from flask.ext.cors import CORS, cross_origin
-import uuid
-import tempfile
-import os
-import os.path
-import errno
 import atexit
 import gevent
 import collections
-import traceback
+import ycm_helpers
 
 import settings
-from ycm import YCM
-from filesync import FileSync
 
 app = Flask(__name__)
 
 cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
-
 mapping = {}
 
 
-YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
-CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
+def make_response(result):
+    """ jsonify a response if it is a dict, otherwise just return it """
+
+    if isinstance(result, collections.Mapping):
+        return jsonify(result)
+    else:
+        return result
+
 
 @app.route('/spinup', methods=['POST'])
 def spinup():
     content = request.get_json(force=True)
-    root_dir = tempfile.mkdtemp()
-    platforms = set(content.get('platforms', ['aplite']))
-    sdk_version = content.get('sdk', '2')
-    print "spinup in %s" % root_dir
-    # Dump all the files we should need.
-    for path, content in content['files'].iteritems():
-        abs_path = os.path.normpath(os.path.join(root_dir, path))
-        if not abs_path.startswith(root_dir):
-            raise Exception("Failed: escaped root directory.")
-        dir_name = os.path.dirname(abs_path)
-        try:
-            os.makedirs(dir_name)
-        except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(dir_name):
-                pass
-            else:
-                raise
-        with open(abs_path, 'w') as f:
-            f.write(content.encode('utf-8'))
-
-    filesync = FileSync(root_dir)
-    ycms = YCMHolder(filesync=filesync, ycms={})
-
-    print "created files"
-    settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
-
-    conf_mapping = {
-        '2': 'ycm_extra_conf_sdk2.py',
-        '3': 'ycm_extra_conf_sdk3.py',
-    }
-    sdk_mapping = {
-        '2': settings.PEBBLE_SDK2,
-        '3': settings.PEBBLE_SDK3,
-    }
-
-    with open(settings_path, "w") as f:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf', conf_mapping[sdk_version])) as template:
-            f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
-
-    try:
-        if 'aplite' in platforms:
-            ycm = YCM(filesync, 'aplite')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['aplite'] = ycm
-
-        if 'basalt' in platforms:
-            ycm = YCM(filesync, 'basalt')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['basalt'] = ycm
-    except Exception as e:
-        print "Failed to spawn ycm with root_dir %s" % root_dir
-        print traceback.format_exc()
-        return jsonify(success=False, error=str(e)), 500
-
-    # Keep track of it
-    this_uuid = str(uuid.uuid4())
-    mapping[this_uuid] = ycms
-    print mapping
-    print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
-    # victory!
-    return jsonify(success=True, uuid=this_uuid)
+    result = ycm_helpers.spinup(content)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/completions', methods=['POST'])
 def get_completions(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    completions = collections.OrderedDict()
-    completion_start_column = None
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
-        platform_completions = ycm.get_completions(data['file'], data['line'], data['ch'])
-        if platform_completions is not None:
-            completion_start_column = platform_completions['completion_start_column']
-            for completion in platform_completions['completions']:
-                if completion['insertion_text'] in completions:
-                    continue
-                completions[completion['insertion_text']] = completion
-
-    return jsonify(
-        completions=completions.values(),
-        start_column=completion_start_column,
-    )
+    result = ycm_helpers.get_completions(process_uuid, data)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/errors', methods=['POST'])
 def get_errors(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    errors = {}
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        result = ycm.parse(data['file'], data['line'], data['ch'])
-        if result is None:
-            continue
-        for error in result:
-            error_key = (error['kind'], error['location']['line_num'], error['text'])
-            if error_key in errors:
-                errors[error_key]['platforms'].append(platform)
-            else:
-                error['platforms'] = [platform]
-                errors[error_key] = error
-
-    return jsonify(
-        errors=errors.values()
-    )
+    result = ycm_helpers.get_errors(process_uuid, data)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/goto', methods=['POST'])
 def go_to(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        ycm.parse(data['file'], data['line'], data['ch'])
-        result = ycm.go_to(data['file'], data['line'], data['ch'])
-        if result is not None:
-            return jsonify(location=result)
-    return jsonify(location=None)
+    result = ycm_helpers.go_to(process_uuid, data)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/create', methods=['POST'])
 def create_file(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    ycms.filesync.create_file(data['filename'], data['content'])
-    return 'ok'
+    result = ycm_helpers.create_file(process_uuid, data)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/delete', methods=['POST'])
 def delete_file(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
     data = request.get_json(force=True)
-    ycms.filesync.delete_file(data['filename'])
-    return 'ok'
+    result = ycm_helpers.create_file(process_uuid, data)
+    return make_response(result)
 
 
 @app.route('/ycm/<process_uuid>/ping', methods=['POST'])
 def ping(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    for ycm in mapping[process_uuid].ycms.itervalues():
-        if not ycm.ping():
-            return 'failed', 504
-
-    return 'ok'
+    result = ycm_helpers.ping(process_uuid)
+    return make_response(result)
 
 
 @atexit.register
 def kill_completers():
-    global mapping
-    for ycms in mapping.itervalues():
-        for ycm in ycms.ycms.itervalues():
-            ycm.close()
-    mapping = {}
+    ycm_helpers.kill_completers()
 
 
-def monitor_processes(mapping):
-    while True:
-        print "process sweep running"
-        gevent.sleep(20)
-        to_kill = set()
-        for uuid, ycms in mapping.iteritems():
-            for platform, ycm in ycms.ycms.iteritems():
-                if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
-                    print "killing %s:%s (alive: %s, patches: %d)" % (uuid, platform, ycm.alive, ycms.filesync.max_pending_patch_count)
-                    ycm.close()
-                    to_kill.append(uuid)
-        for uuid in to_kill:
-            del mapping[uuid]
-        print "process sweep collected %d instances" % len(to_kill)
-
-
-g = gevent.spawn(monitor_processes, mapping)
+g = gevent.spawn(ycm_helpers.monitor_processes, mapping)
 atexit.register(lambda: g.kill())
 
 if __name__ == '__main__':
