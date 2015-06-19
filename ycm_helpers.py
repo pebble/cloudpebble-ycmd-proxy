@@ -163,7 +163,7 @@ def delete_file(process_uuid, data):
     return 'ok'
 
 
-def ping(process_uuid, data):
+def ping(process_uuid, data=None):
     if process_uuid not in mapping:
         return "Not found", 404
     for ycm in mapping[process_uuid].ycms.itervalues():
