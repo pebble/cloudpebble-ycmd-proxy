@@ -25,58 +25,8 @@ def spinup():
     content = request.get_json(force=True)
     result = ycm_helpers.spinup(content)
     result['ws_port'] = settings.PORT
-    return make_response(result)
+    return jsonify(result)
 
-#### These functions are currently kept for now, in order to continue to support HTTP ####
-# TODO: eventually delete these
-def make_response(result):
-    """ jsonify a response if it is a dict, otherwise just return it """
-    if isinstance(result, collections.Mapping):
-        return jsonify(result)
-    else:
-        return result
-
-@app.route('/ycm/<process_uuid>/completions', methods=['POST'])
-def get_completions(process_uuid):
-    data = request.get_json(force=True)
-    result = ycm_helpers.get_completions(process_uuid, data)
-    return make_response(result)
-
-
-@app.route('/ycm/<process_uuid>/errors', methods=['POST'])
-def get_errors(process_uuid):
-    data = request.get_json(force=True)
-    result = ycm_helpers.get_errors(process_uuid, data)
-    return make_response(result)
-
-
-@app.route('/ycm/<process_uuid>/goto', methods=['POST'])
-def go_to(process_uuid):
-    data = request.get_json(force=True)
-    result = ycm_helpers.go_to(process_uuid, data)
-    return make_response(result)
-
-
-@app.route('/ycm/<process_uuid>/create', methods=['POST'])
-def create_file(process_uuid):
-    data = request.get_json(force=True)
-    result = ycm_helpers.create_file(process_uuid, data)
-    return make_response(result)
-
-
-@app.route('/ycm/<process_uuid>/delete', methods=['POST'])
-def delete_file(process_uuid):
-    data = request.get_json(force=True)
-    result = ycm_helpers.create_file(process_uuid, data)
-    return make_response(result)
-
-
-@app.route('/ycm/<process_uuid>/ping', methods=['POST'])
-def ping(process_uuid):
-    result = ycm_helpers.ping(process_uuid)
-    return make_response(result)
-
-#### END HTTP functions ####
 
 #### Websocket handlers ####
 # TODO: maybe do this without a global?
@@ -145,8 +95,6 @@ def server_ws(process_uuid):
         if isinstance(response, collections.Mapping):
             server_ws.send(json.dumps(response))
         else:
-            # TODO: check which things were sending 'ok'.
-            # Make sure nothing relied on them just saying 'ok'
             server_ws.send(json.dumps(dict(message=response)))
     def send_error(id, message):
         response = (dict(success=False, error=message))
