@@ -118,6 +118,8 @@ def get_errors(process_uuid, data):
     errors = {}
     for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
         result = ycm.parse(data['file'], data['line'], data['ch'])
+        if 'exception' in result:
+            continue
         if result is None:
             continue
         for error in result:

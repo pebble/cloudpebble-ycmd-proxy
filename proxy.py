@@ -15,7 +15,7 @@ import settings
 import json
 
 import traceback
-
+import werkzeug.serving
 
 app = Flask(__name__)
 
@@ -45,7 +45,7 @@ _ws_commands = {
 def server_ws(process_uuid):
     global _ws_commands
 
-    # Get the websocket from the request context
+    # Get the WebSocket from the request context
     server_ws = request.environ.get('wsgi.websocket', None)
     if server_ws is None:
         return "websocket endpoint", 400
@@ -129,7 +129,10 @@ def kill_completers():
 g = gevent.spawn(ycm_helpers.monitor_processes, mapping)
 atexit.register(lambda: g.kill())
 
-if __name__ == '__main__':
+# Using upstart to stop the proxy doesn't work unless we run the server with werkzeug's reloader.
+# If there is a better way of doing this, I'm not sure what it is.
+@werkzeug.serving.run_with_reloader
+def run_server():
     app.debug = settings.DEBUG
 
     ssl_args = {}
@@ -143,6 +146,8 @@ if __name__ == '__main__':
 
     server = pywsgi.WSGIServer(('', settings.PORT), app, handler_class=WebSocketHandler, **ssl_args)
     server.start()
-    # TODO: Figure out why the service can't be restart properly if there's an exception in the websocket...
     server.serve_forever()
+
+if __name__ == '__main__':
+    run_server()
 
