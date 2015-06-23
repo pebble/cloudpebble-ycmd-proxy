@@ -14,6 +14,9 @@ import websocket
 import settings
 import json
 
+import traceback
+
+
 app = Flask(__name__)
 
 cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
@@ -54,36 +57,44 @@ def server_ws(process_uuid):
                 # First try to get some valid JSON data
                 # with a command and message id
                 raw = receive()
+                id = -1
                 if raw is None:
                     continue #TODO: check?
                 try:
-                    data = json.loads(raw)
+                    packet = json.loads(raw)
+                    id = packet['_ws_message_id']
+                    command = packet['command']
+                    data= packet['data']
                 except:
-                    error(-1, 'invalid json')
+                    error(id, 'invalid packet')
                     continue
-                id = data.get('_ws_message_id', -1)
-                if 'command' not in data or data['command'] not in _ws_commands:
-                    error(id, 'invalid command')
+
+                if command not in _ws_commands:
+                    error(id, 'unknown command')
                     continue
 
                 # Run the specified command with the correct uuid and data
-                cmd = data['command']
-                del data['command']
                 try:
-                    result = _ws_commands[cmd](process_uuid, data)
+                    result = _ws_commands[command](process_uuid, data)
                 except Exception as e:
                     # TODO: Think carefully about error handling and logging
+                    print "Error running command"
                     print e
+                    print traceback.format_exc()
                     error(id, e.message)
                     continue
 
                 send(id, result)
         except (websocket.WebSocketException, geventwebsocket.WebSocketError, TypeError) as e:
             # TODO: see above
+            print "Websocket error"
             print e
+            print traceback.format_exc()
             alive[0] = False
         except Exception as e:
+            print "General exception!!!"
             print e
+            print traceback.format_exc()
             alive[0] = False
             raise
 
@@ -91,11 +102,12 @@ def server_ws(process_uuid):
 
     # Helper functions for sending responses, includes repeating the ID
     def send_response(id, response):
+        if not isinstance(response, collections.Mapping):
+            response = dict(message=response)
         response['_ws_message_id'] = id
-        if isinstance(response, collections.Mapping):
-            server_ws.send(json.dumps(response))
-        else:
-            server_ws.send(json.dumps(dict(message=response)))
+        return server_ws.send(json.dumps(response))
+
+
     def send_error(id, message):
         response = (dict(success=False, error=message))
         send_response(id, response)
