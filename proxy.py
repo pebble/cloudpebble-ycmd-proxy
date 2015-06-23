@@ -133,6 +133,10 @@ def get_errors(process_uuid):
         result = ycm.parse(data['file'], data['line'], data['ch'])
         if result is None:
             continue
+        if 'exception' in result:
+            # ycm.parse() throws exceptions sometimes, e.g. if the file is too short.
+            # For now, we'll just ignore them. They will still appear in the logs.
+            continue
         for error in result:
             error_key = (error['kind'], error['location']['line_num'], error['text'])
             if error_key in errors:
