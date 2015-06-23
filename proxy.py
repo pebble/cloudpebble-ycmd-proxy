@@ -13,6 +13,7 @@ import ssl
 import websocket
 import settings
 import json
+import gevent.pool
 
 import traceback
 import werkzeug.serving
@@ -75,7 +76,9 @@ def server_ws(process_uuid):
 
                 # Run the specified command with the correct uuid and data
                 try:
+                    print "Running command %s" % command
                     result = _ws_commands[command](process_uuid, data)
+                    print ">> Done running"
                 except Exception as e:
                     # TODO: Think carefully about error handling and logging
                     print "Error running command"
@@ -114,6 +117,12 @@ def server_ws(process_uuid):
 
     # Spawn a greenlet to deal with the websocket connection
     group.spawn(do_recv,lambda: server_ws.receive(), send_response, send_error)
+
+    def end_server():
+        alive[0] = False
+        group.kill()
+
+    atexit.register(end_server)
     group.join()
     return ''
 
@@ -150,4 +159,3 @@ def run_server():
 
 if __name__ == '__main__':
     run_server()
-

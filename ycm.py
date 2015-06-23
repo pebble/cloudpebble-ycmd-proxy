@@ -136,6 +136,7 @@ class YCM(object):
                 'completion_start_column': response['completion_start_column'],
             }
         else:
+            print "!!!!! Error getting completions !!!"
             return None
 
     def wait(self):
