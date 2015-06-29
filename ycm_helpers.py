@@ -188,8 +188,8 @@ def monitor_processes(mapping):
         to_kill = set()
         for uuid, ycms in mapping.iteritems():
             for platform, ycm in ycms.ycms.iteritems():
-                if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
-                    print "killing %s:%s (alive: %s, patches: %d)" % (uuid, platform, ycm.alive, ycms.filesync.max_pending_patch_count)
+                if not ycm.alive:
+                    print "killing %s:%s (alive: %s)" % (uuid, platform, ycm.alive)
                     ycm.close()
                     to_kill.append(uuid)
         for uuid in to_kill:

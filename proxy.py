@@ -60,7 +60,8 @@ def server_ws(process_uuid):
                 raw = receive()
                 id = -1
                 if raw is None:
-                    continue #TODO: check?
+                    continue
+
                 try:
                     packet = json.loads(raw)
                     id = packet['_ws_message_id']
@@ -76,11 +77,10 @@ def server_ws(process_uuid):
 
                 # Run the specified command with the correct uuid and data
                 try:
-                    print "Running command %s" % command
+                    print "Running command: %s" % command
                     result = _ws_commands[command](process_uuid, data)
                     print ">> Done running"
                 except Exception as e:
-                    # TODO: Think carefully about error handling and logging
                     print "Error running command"
                     print e
                     print traceback.format_exc()
@@ -89,15 +89,9 @@ def server_ws(process_uuid):
 
                 send(id, result)
         except (websocket.WebSocketException, geventwebsocket.WebSocketError, TypeError) as e:
-            # TODO: see above
-            print "Websocket error"
-            print e
-            print traceback.format_exc()
+            # WebSocket closed
             alive[0] = False
         except Exception as e:
-            print "General exception!!!"
-            print e
-            print traceback.format_exc()
             alive[0] = False
             raise
 
