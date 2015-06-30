@@ -112,6 +112,7 @@ def ycm_ws(process_uuid):
 
 @atexit.register
 def kill_completers():
+    print "!!!!!!KILLING COMPLETERS!!!!!!"
     ycm_helpers.kill_completers()
 
 
@@ -120,7 +121,7 @@ atexit.register(lambda: g.kill())
 
 # Using upstart to stop the proxy doesn't work unless we run the server with werkzeug's reloader.
 # If there is a better way of doing this, I'm not sure what it is.
-@werkzeug.serving.run_with_reloader
+# werkzeug.serving.run_with_reloader
 def run_server():
     app.debug = settings.DEBUG
 
