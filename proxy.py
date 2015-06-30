@@ -32,19 +32,16 @@ def spinup():
     return jsonify(result)
 
 
-#### Websocket handlers ####
-# TODO: maybe do this without a global?
-_ws_commands = {
-    'completions': ycm_helpers.get_completions,
-    'errors': ycm_helpers.get_errors,
-    'goto': ycm_helpers.go_to,
-    'create': ycm_helpers.create_file,
-    'delete': ycm_helpers.delete_file,
-    'ping': ycm_helpers.ping
-}
 
 def server_ws(process_uuid):
-    global _ws_commands
+    ws_commands = {
+        'completions': ycm_helpers.get_completions,
+        'errors': ycm_helpers.get_errors,
+        'goto': ycm_helpers.go_to,
+        'create': ycm_helpers.create_file,
+        'delete': ycm_helpers.delete_file,
+        'ping': ycm_helpers.ping
+    }
 
     # Get the WebSocket from the request context
     server_ws = request.environ.get('wsgi.websocket', None)
@@ -55,8 +52,6 @@ def server_ws(process_uuid):
     def do_recv(receive, send, error):
         try:
             while alive[0]:
-                # First try to get some valid JSON data
-                # with a command and message id
                 raw = receive()
                 id = -1
                 if raw is None:
@@ -71,19 +66,16 @@ def server_ws(process_uuid):
                     error(id, 'invalid packet')
                     continue
 
-                if command not in _ws_commands:
+                if command not in ws_commands:
                     error(id, 'unknown command')
                     continue
 
                 # Run the specified command with the correct uuid and data
                 try:
                     print "Running command: %s" % command
-                    result = _ws_commands[command](process_uuid, data)
-                    print ">> Done running"
+                    result = ws_commands[command](process_uuid, data)
                 except Exception as e:
-                    print "Error running command"
-                    print e
-                    print traceback.format_exc()
+                    traceback.print_exc()
                     error(id, e.message)
                     continue
 
@@ -95,9 +87,7 @@ def server_ws(process_uuid):
             alive[0] = False
             raise
 
-    group = gevent.pool.Group()
-
-    # Helper functions for sending responses, includes repeating the ID
+    # Functions to send back a response to a message, with its message ID.
     def send_response(id, response):
         if not isinstance(response, collections.Mapping):
             response = dict(message=response)
@@ -109,15 +99,11 @@ def server_ws(process_uuid):
         response = (dict(success=False, error=message))
         send_response(id, response)
 
-    # Spawn a greenlet to deal with the websocket connection
+    # Spawn a Greenlet to deal with the WebSocket connection
+    group = gevent.pool.Group()
     group.spawn(do_recv,lambda: server_ws.receive(), send_response, send_error)
-
-    def end_server():
-        alive[0] = False
-        group.kill()
-
-    atexit.register(end_server)
     group.join()
+
     return ''
 
 @app.route('/ycm/<process_uuid>/ws')
