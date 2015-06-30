@@ -1,6 +1,7 @@
 __author__ = 'katharine'
 
 import os.path
+import errno
 
 
 class FileSync(object):
@@ -45,6 +46,14 @@ class FileSync(object):
 
     def create_file(self, path, content):
         path = self.abs_path(path)
+        dir_name = os.path.dirname(path)
+        try:
+            os.makedirs(dir_name)
+        except OSError as e:
+            if e.errno == errno.EEXIST and os.path.isdir(dir_name):
+                pass
+            else:
+                raise
         with open(path, 'w') as f:
             f.write(content)
 
