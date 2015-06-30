@@ -79,7 +79,7 @@ def spinup(content):
     # Keep track of it
     this_uuid = str(uuid.uuid4())
     mapping[this_uuid] = ycms
-    print mapping
+    # print mapping
     print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
     return dict(success=True, uuid=this_uuid)
