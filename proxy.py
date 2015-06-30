@@ -14,7 +14,7 @@ import websocket
 import settings
 import json
 import gevent.pool
-
+import signal, sys
 import traceback
 import werkzeug.serving
 
@@ -30,7 +30,6 @@ def spinup():
     result = ycm_helpers.spinup(content)
     result['ws_port'] = settings.PORT
     return jsonify(result)
-
 
 
 def server_ws(process_uuid):
@@ -112,16 +111,14 @@ def ycm_ws(process_uuid):
 
 @atexit.register
 def kill_completers():
-    print "!!!!!!KILLING COMPLETERS!!!!!!"
+    print "Shutting down completers"
     ycm_helpers.kill_completers()
 
 
 g = gevent.spawn(ycm_helpers.monitor_processes, mapping)
 atexit.register(lambda: g.kill())
 
-# Using upstart to stop the proxy doesn't work unless we run the server with werkzeug's reloader.
-# If there is a better way of doing this, I'm not sure what it is.
-# werkzeug.serving.run_with_reloader
+
 def run_server():
     app.debug = settings.DEBUG
 
@@ -133,10 +130,17 @@ def run_server():
             'ca_certs': '%s/ca-cert.pem' % settings.SSL_ROOT,
             'ssl_version': ssl.PROTOCOL_TLSv1,
         }
-
     server = pywsgi.WSGIServer(('', settings.PORT), app, handler_class=WebSocketHandler, **ssl_args)
+
+    # Ensure that the program actually quits when we ask it to
+    def sigterm_handler(_signo, _stack_frame):
+        sys.exit(signal.SIGTERM)
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
+
     server.start()
     server.serve_forever()
+
 
 if __name__ == '__main__':
     run_server()
