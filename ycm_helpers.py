@@ -18,6 +18,9 @@ mapping = {}
 YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
 CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
+class YCMProxyException(Exception):
+    pass
+
 
 def spinup(content):
     root_dir = tempfile.mkdtemp()
@@ -87,7 +90,7 @@ def spinup(content):
 
 def get_completions(process_uuid, data):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
@@ -111,7 +114,7 @@ def get_completions(process_uuid, data):
 
 def get_errors(process_uuid, data):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
@@ -137,7 +140,7 @@ def get_errors(process_uuid, data):
 
 def go_to(process_uuid, data):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
@@ -151,7 +154,7 @@ def go_to(process_uuid, data):
 
 def create_file(process_uuid, data):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     ycms.filesync.create_file(data['filename'], data['content'])
     return 'ok'
@@ -159,7 +162,7 @@ def create_file(process_uuid, data):
 
 def delete_file(process_uuid, data):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     ycms.filesync.delete_file(data['filename'])
     return 'ok'
@@ -167,10 +170,10 @@ def delete_file(process_uuid, data):
 
 def ping(process_uuid, data=None):
     if process_uuid not in mapping:
-        return "Not found", 404
+        raise YCMProxyException("UUID not found")
     for ycm in mapping[process_uuid].ycms.itervalues():
         if not ycm.ping():
-            return 'failed', 504
+            raise YCMProxyException("Failed to ping YCM")
 
     return 'ok'
 

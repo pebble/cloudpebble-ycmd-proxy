@@ -1,22 +1,22 @@
 #!/usr/bin/env python
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 from flask import Flask, request, jsonify
-from flask.ext.cors import CORS, cross_origin
+from flask.ext.cors import CORS
 import atexit
 import gevent
 import collections
-import ycm_helpers
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 import geventwebsocket
 import ssl
 import websocket
-import settings
 import json
-import gevent.pool
-import signal, sys
+import signal
+import sys
 import traceback
-import werkzeug.serving
+
+import settings
+import ycm_helpers
 
 app = Flask(__name__)
 
@@ -43,71 +43,66 @@ def server_ws(process_uuid):
     }
 
     # Get the WebSocket from the request context
-    server_ws = request.environ.get('wsgi.websocket', None)
-    if server_ws is None:
+    socket = request.environ.get('wsgi.websocket', None)
+    if socket is None:
         return "websocket endpoint", 400
 
-    alive = [True]
-    def do_recv(receive, send, error):
-        try:
-            while alive[0]:
-                raw = receive()
-                id = -1
-                if raw is None:
-                    continue
-
-                try:
-                    packet = json.loads(raw)
-                    id = packet['_ws_message_id']
-                    command = packet['command']
-                    data= packet['data']
-                except:
-                    error(id, 'invalid packet')
-                    continue
-
-                if command not in ws_commands:
-                    error(id, 'unknown command')
-                    continue
-
-                # Run the specified command with the correct uuid and data
-                try:
-                    print "Running command: %s" % command
-                    result = ws_commands[command](process_uuid, data)
-                except Exception as e:
-                    traceback.print_exc()
-                    error(id, e.message)
-                    continue
-
-                send(id, result)
-        except (websocket.WebSocketException, geventwebsocket.WebSocketError, TypeError) as e:
-            # WebSocket closed
-            alive[0] = False
-        except Exception as e:
-            alive[0] = False
-            raise
-
     # Functions to send back a response to a message, with its message ID.
-    def send_response(id, response):
+    def send_response(message_id, response):
         if not isinstance(response, collections.Mapping):
             response = dict(message=response)
-        response['_ws_message_id'] = id
-        return server_ws.send(json.dumps(response))
+        response['_ws_message_id'] = message_id
+        return socket.send(json.dumps(response))
 
-
-    def send_error(id, message):
+    def send_error(message_id, message):
         response = (dict(success=False, error=message))
-        send_response(id, response)
+        send_response(message_id, response)
 
-    # Spawn a Greenlet to deal with the WebSocket connection
-    group = gevent.pool.Group()
-    group.spawn(do_recv,lambda: server_ws.receive(), send_response, send_error)
-    group.join()
+    # Loop for as long as the WebSocket remains open
+    try:
+        while True:
+            raw = socket.receive()
+            packet_id = None
+            if raw is None:
+                continue
+
+            try:
+                packet = json.loads(raw)
+                packet_id = packet['_ws_message_id']
+                command = packet['command']
+                data = packet['data']
+            except (KeyError, ValueError):
+                send_error(packet_id, 'invalid packet')
+                continue
+
+            if command not in ws_commands:
+                send_error(packet_id, 'unknown command')
+                continue
+
+            # Run the specified command with the correct uuid and data
+            try:
+                print "Running command: %s" % command
+                result = ws_commands[command](process_uuid, data)
+            except ycm_helpers.YCMProxyException as e:
+                send_error(packet_id, e.message)
+                continue
+            except Exception as e:
+                traceback.print_exc()
+                send_error(packet_id, e.message)
+                continue
+
+            send_response(packet_id, result)
+    except (websocket.WebSocketException, geventwebsocket.WebSocketError, TypeError):
+        # WebSocket closed
+        pass
 
     return ''
+
 
 @app.route('/ycm/<process_uuid>/ws')
 def ycm_ws(process_uuid):
     return server_ws(process_uuid)
+
 
 @atexit.register
 def kill_completers():
@@ -134,9 +129,8 @@ def run_server():
 
     # Ensure that the program actually quits when we ask it to
     def sigterm_handler(_signo, _stack_frame):
-        sys.exit(signal.SIGTERM)
+        sys.exit(0)
     signal.signal(signal.SIGTERM, sigterm_handler)
-
 
     server.start()
     server.serve_forever()
