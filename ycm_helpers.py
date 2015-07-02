@@ -18,6 +18,7 @@ mapping = {}
 YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
 CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
+
 class YCMProxyException(Exception):
     pass
 
@@ -177,6 +178,7 @@ def ping(process_uuid, data=None):
 
     return 'ok'
 
+
 def kill_completers():
     global mapping
     for ycms in mapping.itervalues():
@@ -184,19 +186,19 @@ def kill_completers():
             ycm.close()
     mapping = {}
 
-def monitor_processes(mapping):
+
+def monitor_processes(process_mapping):
     while True:
         print "process sweep running"
         gevent.sleep(20)
         to_kill = set()
-        for uuid, ycms in mapping.iteritems():
+        for process_uuid, ycms in process_mapping.iteritems():
             for platform, ycm in ycms.ycms.iteritems():
                 if not ycm.alive:
                     print "killing %s:%s (alive: %s)" % (uuid, platform, ycm.alive)
                     ycm.close()
-                    to_kill.append(uuid)
-        for uuid in to_kill:
-            del mapping[uuid]
+                    to_kill.append(process_uuid)
+        for process_uuid in to_kill:
+            del process_mapping[process_uuid]
     print "process sweep collected %d instances" % len(to_kill)
-
 
