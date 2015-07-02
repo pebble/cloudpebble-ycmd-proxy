@@ -14,7 +14,7 @@ import json
 import signal
 import sys
 import traceback
-
+import os.path
 import settings
 import ycm_helpers
 
@@ -29,6 +29,7 @@ def spinup():
     content = request.get_json(force=True)
     result = ycm_helpers.spinup(content)
     result['ws_port'] = settings.PORT
+    result['secure'] = (settings.SSL_ROOT is not None)
     return jsonify(result)
 
 
@@ -119,10 +120,11 @@ def run_server():
 
     ssl_args = {}
     if settings.SSL_ROOT is not None:
+        print "Running with SSL"
         ssl_args = {
-            'keyfile': '%s/server-key.pem' % settings.SSL_ROOT,
-            'certfile': '%s/server-cert.pem' % settings.SSL_ROOT,
-            'ca_certs': '%s/ca-cert.pem' % settings.SSL_ROOT,
+            'keyfile': os.path.join(settings.SSL_ROOT, 'server-key.pem'),
+            'certfile': os.path.join(settings.SSL_ROOT, 'server-cert.pem'),
+            'ca_certs': os.path.join(settings.SSL_ROOT, 'ca-cert.pem'),
             'ssl_version': ssl.PROTOCOL_TLSv1,
         }
     server = pywsgi.WSGIServer(('', settings.PORT), app, handler_class=WebSocketHandler, **ssl_args)
