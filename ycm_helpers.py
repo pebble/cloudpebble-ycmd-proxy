@@ -158,15 +158,12 @@ def create_file(process_uuid, data):
         raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     ycms.filesync.create_file(data['filename'], data['content'])
-    return 'ok'
-
 
 def delete_file(process_uuid, data):
     if process_uuid not in mapping:
         raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
     ycms.filesync.delete_file(data['filename'])
-    return 'ok'
 
 
 def ping(process_uuid, data=None):
@@ -175,8 +172,6 @@ def ping(process_uuid, data=None):
     for ycm in mapping[process_uuid].ycms.itervalues():
         if not ycm.ping():
             raise YCMProxyException("Failed to ping YCM")
-
-    return 'ok'
 
 
 def kill_completers():
