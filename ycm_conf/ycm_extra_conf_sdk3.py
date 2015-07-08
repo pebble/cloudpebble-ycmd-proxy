@@ -23,6 +23,7 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-DRELEASE',
                 '-DPBL_PLATFORM_BASALT',
                 '-DPBL_COLOR',
+                '-DPBL_SDK_3',
                 '-D_TIME_H_',
             ],
             'do_cache': True,
@@ -50,6 +51,7 @@ elif os.environ['PLATFORM'] == 'aplite':
                 '-DRELEASE',
                 '-DPBL_PLATFORM_APLITE',
                 '-DPBL_BW',
+                '-DPBL_SDK_2',
             ],
             'do_cache': True,
         }}
