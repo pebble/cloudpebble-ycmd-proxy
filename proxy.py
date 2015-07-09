@@ -13,7 +13,7 @@ import json
 import signal
 import sys
 import traceback
-import os.path
+import os
 import settings
 import ycm_helpers
 
