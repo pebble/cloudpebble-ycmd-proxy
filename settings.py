@@ -10,3 +10,5 @@ STDLIB_INCLUDE_PATH = env.get('YCMD_STDLIB', "/usr/local/Cellar/pebble-sdk/2.5/a
 DEBUG = 'DEBUG' in env
 PORT = int(env.get('YCMD_PORT', 5000))
 HOST = env.get('YCMD_HOST', '0.0.0.0')
+SSL_ROOT = env.get('SSL_ROOT', None)
+RUN_AS_USER = env.get('RUN_AS_USER', None)

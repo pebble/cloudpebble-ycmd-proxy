@@ -4,7 +4,6 @@ import base64
 import tempfile
 import json
 import subprocess
-import os.path
 import requests
 import hmac
 import hashlib

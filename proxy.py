@@ -1,230 +1,161 @@
 #!/usr/bin/env python
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 from flask import Flask, request, jsonify
-from flask.ext.cors import CORS, cross_origin
-import uuid
-import tempfile
-import os
-import os.path
-import errno
+from flask.ext.cors import CORS
 import atexit
 import gevent
-import collections
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
+import geventwebsocket
+import ssl
+import json
+import signal
+import sys
 import traceback
-
+import os
+import pwd
+import grp
 import settings
-from ycm import YCM
-from filesync import FileSync
+import ycm_helpers
 
 app = Flask(__name__)
 
 cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
-
 mapping = {}
 
-
-YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
-CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
 @app.route('/spinup', methods=['POST'])
 def spinup():
     content = request.get_json(force=True)
-    root_dir = tempfile.mkdtemp()
-    platforms = set(content.get('platforms', ['aplite']))
-    sdk_version = content.get('sdk', '2')
-    print "spinup in %s" % root_dir
-    # Dump all the files we should need.
-    for path, content in content['files'].iteritems():
-        abs_path = os.path.normpath(os.path.join(root_dir, path))
-        if not abs_path.startswith(root_dir):
-            raise Exception("Failed: escaped root directory.")
-        dir_name = os.path.dirname(abs_path)
-        try:
-            os.makedirs(dir_name)
-        except OSError as e:
-            if e.errno == errno.EEXIST and os.path.isdir(dir_name):
-                pass
-            else:
-                raise
-        with open(abs_path, 'w') as f:
-            f.write(content.encode('utf-8'))
+    result = ycm_helpers.spinup(content)
+    result['ws_port'] = settings.PORT
+    result['secure'] = (settings.SSL_ROOT is not None)
+    return jsonify(result)
 
-    filesync = FileSync(root_dir)
-    ycms = YCMHolder(filesync=filesync, ycms={})
 
-    print "created files"
-    settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
-
-    conf_mapping = {
-        '2': 'ycm_extra_conf_sdk2.py',
-        '3': 'ycm_extra_conf_sdk3.py',
-    }
-    sdk_mapping = {
-        '2': settings.PEBBLE_SDK2,
-        '3': settings.PEBBLE_SDK3,
+def server_ws(process_uuid):
+    ws_commands = {
+        'completions': ycm_helpers.get_completions,
+        'errors': ycm_helpers.get_errors,
+        'goto': ycm_helpers.go_to,
+        'create': ycm_helpers.create_file,
+        'delete': ycm_helpers.delete_file,
+        'ping': ycm_helpers.ping
     }
 
-    with open(settings_path, "w") as f:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf', conf_mapping[sdk_version])) as template:
-            f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
+    # Get the WebSocket from the request context
+    socket = request.environ.get('wsgi.websocket', None)
+    if socket is None:
+        return "websocket endpoint", 400
 
+    # Functions to send back a response to a message, with its message ID.
+    def respond(message_id, response, success=True):
+        key = 'data' if success else 'error'
+        return socket.send(json.dumps({
+            key: response,
+            '_id': message_id,
+            'success': success
+        }))
+
+
+    # Loop for as long as the WebSocket remains open
     try:
-        if 'aplite' in platforms:
-            ycm = YCM(filesync, 'aplite')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['aplite'] = ycm
+        while True:
+            raw = socket.receive()
+            packet_id = None
+            if raw is None:
+                continue
 
-        if 'basalt' in platforms:
-            ycm = YCM(filesync, 'basalt')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['basalt'] = ycm
-    except Exception as e:
-        print "Failed to spawn ycm with root_dir %s" % root_dir
-        print traceback.format_exc()
-        return jsonify(success=False, error=str(e)), 500
+            try:
+                packet = json.loads(raw)
+                packet_id = packet['_id']
+                command = packet['command']
+                data = packet['data']
+            except (KeyError, ValueError):
+                respond(packet_id, 'invalid packet', success=False)
+                continue
 
-    # Keep track of it
-    this_uuid = str(uuid.uuid4())
-    mapping[this_uuid] = ycms
-    print mapping
-    print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
-    # victory!
-    return jsonify(success=True, uuid=this_uuid)
+            if command not in ws_commands:
+                respond(packet_id, 'unknown command', success=False)
+                continue
 
+            # Run the specified command with the correct uuid and data
+            try:
+                print "Running command: %s" % command
+                result = ws_commands[command](process_uuid, data)
+            except ycm_helpers.YCMProxyException as e:
+                respond(packet_id, e.message, success=False)
+                continue
+            except Exception as e:
+                traceback.print_exc()
+                respond(packet_id, e.message, success=False)
+                continue
 
-@app.route('/ycm/<process_uuid>/completions', methods=['POST'])
-def get_completions(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
-    data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    completions = collections.OrderedDict()
-    completion_start_column = None
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        ycm.parse(data['file'], data['line'], data['ch'])  # TODO: Should we do this here?
-        platform_completions = ycm.get_completions(data['file'], data['line'], data['ch'])
-        if platform_completions is not None:
-            completion_start_column = platform_completions['completion_start_column']
-            for completion in platform_completions['completions']:
-                if completion['insertion_text'] in completions:
-                    continue
-                completions[completion['insertion_text']] = completion
+            respond(packet_id, result, success=True)
+    except (geventwebsocket.WebSocketError, TypeError):
+        # WebSocket closed
+        pass
 
-    return jsonify(
-        completions=completions.values(),
-        start_column=completion_start_column,
-    )
+    return ''
 
 
-@app.route('/ycm/<process_uuid>/errors', methods=['POST'])
-def get_errors(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
-    data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    errors = {}
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        result = ycm.parse(data['file'], data['line'], data['ch'])
-        if result is None:
-            continue
-        if 'exception' in result:
-            # ycm.parse() throws exceptions sometimes, e.g. if the file is too short.
-            # For now, we'll just ignore them. They will still appear in the logs.
-            continue
-        for error in result:
-            error_key = (error['kind'], error['location']['line_num'], error['text'])
-            if error_key in errors:
-                errors[error_key]['platforms'].append(platform)
-            else:
-                error['platforms'] = [platform]
-                errors[error_key] = error
-
-    return jsonify(
-        errors=errors.values()
-    )
-
-
-@app.route('/ycm/<process_uuid>/goto', methods=['POST'])
-def go_to(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
-    data = request.get_json(force=True)
-    if 'patches' in data:
-        ycms.filesync.apply_patches(data['patches'])
-    for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
-        ycm.parse(data['file'], data['line'], data['ch'])
-        result = ycm.go_to(data['file'], data['line'], data['ch'])
-        if result is not None:
-            return jsonify(location=result)
-    return jsonify(location=None)
-
-
-@app.route('/ycm/<process_uuid>/create', methods=['POST'])
-def create_file(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
-    data = request.get_json(force=True)
-    ycms.filesync.create_file(data['filename'], data['content'])
-    return 'ok'
-
-
-@app.route('/ycm/<process_uuid>/delete', methods=['POST'])
-def delete_file(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    ycms = mapping[process_uuid]
-    data = request.get_json(force=True)
-    ycms.filesync.delete_file(data['filename'])
-    return 'ok'
-
-
-@app.route('/ycm/<process_uuid>/ping', methods=['POST'])
-def ping(process_uuid):
-    if process_uuid not in mapping:
-        return "Not found", 404
-    for ycm in mapping[process_uuid].ycms.itervalues():
-        if not ycm.ping():
-            return 'failed', 504
-
-    return 'ok'
+@app.route('/ycm/<process_uuid>/ws')
+def ycm_ws(process_uuid):
+    return server_ws(process_uuid)
 
 
 @atexit.register
 def kill_completers():
-    global mapping
-    for ycms in mapping.itervalues():
-        for ycm in ycms.ycms.itervalues():
-            ycm.close()
-    mapping = {}
+    print "Shutting down completers"
+    ycm_helpers.kill_completers()
 
 
-def monitor_processes(mapping):
-    while True:
-        print "process sweep running"
-        gevent.sleep(20)
-        to_kill = set()
-        for uuid, ycms in mapping.iteritems():
-            for platform, ycm in ycms.ycms.iteritems():
-                if not ycm.alive or ycms.filesync.max_pending_patch_count > 100:
-                    print "killing %s:%s (alive: %s, patches: %d)" % (uuid, platform, ycm.alive, ycms.filesync.max_pending_patch_count)
-                    ycm.close()
-                    to_kill.append(uuid)
-        for uuid in to_kill:
-            del mapping[uuid]
-        print "process sweep collected %d instances" % len(to_kill)
-
-
-g = gevent.spawn(monitor_processes, mapping)
+g = gevent.spawn(ycm_helpers.monitor_processes, mapping)
 atexit.register(lambda: g.kill())
 
-if __name__ == '__main__':
+def drop_privileges(uid_name='nobody', gid_name='nogroup'):
+    if os.getuid() != 0:
+        # We're not root so, like, whatever dude
+        return
+
+    # Get the uid/gid from the name
+    running_uid = pwd.getpwnam(uid_name).pw_uid
+    running_gid = grp.getgrnam(gid_name).gr_gid
+
+    # Remove group privileges
+    os.setgroups([])
+
+    # Try setting the new uid/gid
+    os.setgid(running_gid)
+    os.setuid(running_uid)
+
+    # Ensure a very conservative umask
+    os.umask(077)
+
+def run_server():
     app.debug = settings.DEBUG
-    app.run(settings.HOST, settings.PORT)
+
+    ssl_args = {}
+    if settings.SSL_ROOT is not None:
+        print "Running with SSL"
+        ssl_args = {
+            'keyfile': os.path.join(settings.SSL_ROOT, 'server-key.pem'),
+            'certfile': os.path.join(settings.SSL_ROOT, 'server-cert.pem'),
+            'ca_certs': os.path.join(settings.SSL_ROOT, 'ca-cert.pem'),
+            'ssl_version': ssl.PROTOCOL_TLSv1,
+        }
+    server = pywsgi.WSGIServer(('', settings.PORT), app, handler_class=WebSocketHandler, **ssl_args)
+
+    # Ensure that the program actually quits when we ask it to
+    def sigterm_handler(_signo, _stack_frame):
+        sys.exit(0)
+    signal.signal(signal.SIGTERM, sigterm_handler)
+
+    server.start()
+    if settings.RUN_AS_USER is not None:
+        drop_privileges(settings.RUN_AS_USER, settings.RUN_AS_USER)
+    server.serve_forever()
+
+
+if __name__ == '__main__':
+    run_server()
