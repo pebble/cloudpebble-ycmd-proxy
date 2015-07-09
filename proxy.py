@@ -8,7 +8,6 @@ from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 import geventwebsocket
 import ssl
-import websocket
 import json
 import signal
 import sys
@@ -91,7 +90,7 @@ def server_ws(process_uuid):
                 continue
 
             respond(packet_id, result, success=True)
-    except (websocket.WebSocketException, geventwebsocket.WebSocketError, TypeError):
+    except (geventwebsocket.WebSocketError, TypeError):
         # WebSocket closed
         pass
 
