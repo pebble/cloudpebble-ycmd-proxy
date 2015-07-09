@@ -13,6 +13,8 @@ import signal
 import sys
 import traceback
 import os
+import pwd
+import grp
 import settings
 import ycm_helpers
 
