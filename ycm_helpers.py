@@ -8,6 +8,7 @@ import errno
 import gevent
 import collections
 import traceback
+import atexit
 
 import settings
 from ycm import YCM
@@ -159,6 +160,7 @@ def create_file(process_uuid, data):
     ycms = mapping[process_uuid]
     ycms.filesync.create_file(data['filename'], data['content'])
 
+
 def delete_file(process_uuid, data):
     if process_uuid not in mapping:
         raise YCMProxyException("UUID not found")
@@ -174,26 +176,45 @@ def ping(process_uuid, data=None):
             raise YCMProxyException("Failed to ping YCM")
 
 
+def kill_completer(process_uuid):
+    global mapping
+    if process_uuid in mapping:
+        for platform, ycm in mapping[process_uuid].ycms.iteritems():
+            print "killing %s:%s (alive: %s)" % (process_uuid, platform, ycm.alive)
+            ycm.close()
+        del mapping[process_uuid]
+    else:
+        print "no uuid %s to kill" % process_uuid
+
+
 def kill_completers():
     global mapping
+
     for ycms in mapping.itervalues():
         for ycm in ycms.ycms.itervalues():
             ycm.close()
     mapping = {}
 
 
-def monitor_processes(process_mapping):
-    while True:
-        print "process sweep running"
-        gevent.sleep(20)
-        to_kill = set()
-        for process_uuid, ycms in process_mapping.iteritems():
-            for platform, ycm in ycms.ycms.iteritems():
-                if not ycm.alive:
-                    print "killing %s:%s (alive: %s)" % (uuid, platform, ycm.alive)
-                    ycm.close()
-                    to_kill.append(process_uuid)
-        for process_uuid in to_kill:
-            del process_mapping[process_uuid]
-    print "process sweep collected %d instances" % len(to_kill)
+def monitor_processes():
+    global mapping
+
+    def monitor(process_mapping):
+        while True:
+            print "process sweep running"
+            gevent.sleep(20)
+            to_kill = set()
+
+            for process_uuid, ycms in process_mapping.iteritems():
+                for platform, ycm in ycms.ycms.iteritems():
+                    if not ycm.alive:
+                        print "killing %s:%s (alive: %s)" % (process_uuid, platform, ycm.alive)
+                        ycm.close()
+                        to_kill.add(process_uuid)
+            for process_uuid in to_kill:
+                del process_mapping[process_uuid]
+            print "process sweep collected %d instances" % len(to_kill)
+
+    g = gevent.spawn(monitor, mapping)
+    atexit.register(lambda: g.kill())
 

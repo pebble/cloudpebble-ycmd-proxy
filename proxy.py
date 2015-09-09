@@ -10,7 +10,6 @@ import geventwebsocket
 import ssl
 import json
 import signal
-import sys
 import traceback
 import os
 import pwd
@@ -21,7 +20,6 @@ import ycm_helpers
 app = Flask(__name__)
 
 cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
-mapping = {}
 
 
 @app.route('/spinup', methods=['POST'])
@@ -56,7 +54,6 @@ def server_ws(process_uuid):
             '_id': message_id,
             'success': success
         }))
-
 
     # Loop for as long as the WebSocket remains open
     try:
@@ -95,6 +92,10 @@ def server_ws(process_uuid):
     except (geventwebsocket.WebSocketError, TypeError):
         # WebSocket closed
         pass
+    finally:
+        ycm_helpers.kill_completer(process_uuid)
+
+    print "Closing websocket"
 
     return ''
 
@@ -109,9 +110,6 @@ def kill_completers():
     print "Shutting down completers"
     ycm_helpers.kill_completers()
 
-
-g = gevent.spawn(ycm_helpers.monitor_processes, mapping)
-atexit.register(lambda: g.kill())
 
 def drop_privileges(uid_name='nobody', gid_name='nogroup'):
     if os.getuid() != 0:
@@ -132,8 +130,11 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
     # Ensure a very conservative umask
     os.umask(077)
 
+
 def run_server():
     app.debug = settings.DEBUG
+
+    ycm_helpers.monitor_processes()
 
     ssl_args = {}
     if settings.SSL_ROOT is not None:
