@@ -147,9 +147,11 @@ def run_server():
     server = pywsgi.WSGIServer(('', settings.PORT), app, handler_class=WebSocketHandler, **ssl_args)
 
     # Ensure that the program actually quits when we ask it to
-    def sigterm_handler(_signo, _stack_frame):
-        sys.exit(0)
-    signal.signal(signal.SIGTERM, sigterm_handler)
+    def signal_handler(_signo, _stack_frame):
+        print "Received signal (%s), stoping server" % _signo
+        server.stop(timeout=1)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGSEGV, signal_handler)
 
     server.start()
     if settings.RUN_AS_USER is not None:
