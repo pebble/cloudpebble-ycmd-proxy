@@ -76,6 +76,13 @@ def spinup(content):
             ycm.wait()
             ycm.apply_settings(settings_path)
             ycms.ycms['basalt'] = ycm
+
+        if 'chalk' in platforms:
+            ycm = YCM(filesync, 'chalk')
+            ycm.wait()
+            ycm.apply_settings(settings_path)
+            ycms.ycms['chalk'] = ycm
+
     except Exception as e:
         print "Failed to spawn ycm with root_dir %s" % root_dir
         print traceback.format_exc()
@@ -217,4 +224,3 @@ def monitor_processes():
 
     g = gevent.spawn(monitor, mapping)
     atexit.register(lambda: g.kill())
-
