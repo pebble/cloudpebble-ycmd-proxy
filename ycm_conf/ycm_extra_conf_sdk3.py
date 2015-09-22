@@ -24,6 +24,7 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-DPBL_PLATFORM_BASALT',
                 '-DPBL_COLOR',
                 '-DPBL_SDK_3',
+                '-DPBL_RECT',
                 '-D_TIME_H_',
             ],
             'do_cache': True,
@@ -51,11 +52,12 @@ elif os.environ['PLATFORM'] == 'aplite':
                 '-DRELEASE',
                 '-DPBL_PLATFORM_APLITE',
                 '-DPBL_BW',
+                '-DPBL_RECT',
                 '-DPBL_SDK_2',
             ],
             'do_cache': True,
         }}
-if os.environ['PLATFORM'] == 'chalk':
+elif os.environ['PLATFORM'] == 'chalk':
     def FlagsForFile(filename, **kwargs):
         return {{
             'flags': [
@@ -79,6 +81,7 @@ if os.environ['PLATFORM'] == 'chalk':
                 '-DPBL_PLATFORM_CHALK',
                 '-DPBL_COLOR',
                 '-DPBL_SDK_3',
+                '-DPBL_ROUND',
                 '-D_TIME_H_',
             ],
             'do_cache': True,
