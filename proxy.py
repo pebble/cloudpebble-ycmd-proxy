@@ -17,21 +17,44 @@ import grp
 import settings
 import ycm_helpers
 
+from guppy import hpy
+h = hpy()
+
 app = Flask(__name__)
 
 cors = CORS(app, headers=["X-Requested-With", "X-CSRFToken", "Content-Type"], resources="/ycm/*")
 
+# oldspinupheap = None
+
+def do_test(content):
+    ycm_helpers.kill_completer(ycm_helpers.spinup(content)['uuid'])
 
 @app.route('/spinup', methods=['POST'])
 def spinup():
+
     content = request.get_json(force=True)
-    result = ycm_helpers.spinup(content)
-    result['ws_port'] = settings.PORT
-    result['secure'] = (settings.SSL_ROOT is not None)
-    return jsonify(result)
+    old = h.heap()
+    do_test(content)
+    new = h.heap()
 
 
+    print (new - old)
+    print (new - old).byrcs[1].byid
+
+    return jsonify({})
+
+oldheap = None
 def server_ws(process_uuid):
+    global oldheap
+    newheap = h.heap()
+    if oldheap:
+        diff = newheap - oldheap
+        # print diff
+    print oldheap
+    print newheap
+    oldheap = newheap
+
+
     ws_commands = {
         'completions': ycm_helpers.get_completions,
         'errors': ycm_helpers.get_errors,
@@ -97,6 +120,7 @@ def server_ws(process_uuid):
 
     print "Closing websocket"
 
+
     return ''
 
 
@@ -133,7 +157,8 @@ def drop_privileges(uid_name='nobody', gid_name='nogroup'):
 
 def run_server():
     app.debug = settings.DEBUG
-
+    if app.debug:
+        print "Running YCMD-proxy in debug mode"
     ycm_helpers.monitor_processes()
 
     ssl_args = {}

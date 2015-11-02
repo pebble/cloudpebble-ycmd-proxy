@@ -19,6 +19,8 @@ from filesync import FileSync
 
 __author__ = 'katharine'
 
+from guppy import hpy
+h = hpy()
 
 class YCM(object):
     def __init__(self, files, platform='aplite'):
@@ -33,7 +35,7 @@ class YCM(object):
 
     def _spawn(self):
         with tempfile.NamedTemporaryFile(delete=False) as f:
-            ycmd_settings = json.load(open(settings.YCMD_SETTINGS))
+            ycmd_settings = json.load(open("/ycmd/ycmd/default_settings.json"))
             ycmd_settings['hmac_secret'] = base64.b64encode(self._secret)
             ycmd_settings['confirm_extra_conf'] = 0
             json.dump(ycmd_settings, f)
@@ -41,7 +43,7 @@ class YCM(object):
         env = os.environ.copy()
         env['PLATFORM'] = self.platform
         self._process = subprocess.Popen([
-            settings.YCMD_BINARY,
+            "/ycmd/ycmd/__main__.py",
             '--idle_suicide_seconds', '300',
             '--port', str(self._port),
             '--options_file', options_file
@@ -138,6 +140,7 @@ class YCM(object):
             return None
 
     def wait(self):
+        # old = h.heap()
         while True:
             try:
                 gevent.sleep(0.1)
@@ -145,12 +148,16 @@ class YCM(object):
                     'X-Ycm-Hmac': self._hmac(''),
                 }
                 result = requests.get("http://localhost:%d/ready" % self._port, headers=headers)
-                print result
-            except requests.exceptions.ConnectionError:
-                pass
+                print "CONNECTED",  result
+            except requests.exceptions.ConnectionError as e:
+                print "CONNECTION ERROR", e
             else:
-                if 200 <= result.status_code < 300 and result.json():
+                if True or 200 <= result.status_code < 300 and result.json():
+                    print "DONE"
                     return True
+        print "Done waiting"
+        # new = h.heap()
+        # print new - old
 
     def _hmac(self, body):
         return base64.b64encode(hmac.new(self._secret, body, hashlib.sha256).hexdigest())
@@ -173,7 +180,7 @@ class YCM(object):
     def close(self):
         print "terminating server"
         try:
-            self._process.terminate()
+            self._process.kill()
         except Exception as e:
             print "Error terminating process: %s" % e
         try:
@@ -196,3 +203,25 @@ class YCM(object):
         sym = sym.copy()
         sym['detailed_info'] = sym['detailed_info'].split("\n")[0]
         return sym
+import time
+
+def do_things():
+    for x in range(5):
+        root_dir = tempfile.mkdtemp()
+        filesync = FileSync(root_dir)
+        ycm = YCM(filesync, 'aplite')
+        ycm.close()
+    pass
+
+
+if __name__ == '__main__':
+    from filesync import FileSync
+    h.heap()
+    do_things()
+    print "********** Done it once *********"
+
+    old = h.heap()
+    do_things()
+    new = h.heap()
+    diff = new - old
+    print diff[0].byid
