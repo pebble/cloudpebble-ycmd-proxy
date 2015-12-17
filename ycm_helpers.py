@@ -86,7 +86,7 @@ def spinup(content):
     except Exception as e:
         print "Failed to spawn ycm with root_dir %s" % root_dir
         print traceback.format_exc()
-        return dict(success=False, error=str(e)), 500
+        return dict(success=False, error=str(e))
 
     # Keep track of it
     this_uuid = str(uuid.uuid4())

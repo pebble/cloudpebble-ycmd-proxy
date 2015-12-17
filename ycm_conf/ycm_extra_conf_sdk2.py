@@ -13,7 +13,7 @@ def FlagsForFile(filename, **kwargs):
             '-Wno-unused-parameter',
             '-Wno-error=unused-function',
             '-Wno-error=unused-variable',
-            '-I{sdk}/Pebble/include',
+            '-I{sdk}/pebble/include',
             '-I{here}/build',
             '-I{here}',
             '-I{here}/build/src',
