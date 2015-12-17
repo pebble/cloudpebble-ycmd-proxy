@@ -1,4 +1,5 @@
 FROM python:2.7
+MAINTAINER Katharine Berry <katharine@pebble.com>
 
 RUN apt-get update && apt-get install -y cmake
 
