@@ -37,5 +37,5 @@ ENV PATH="$PATH:/arm-cs-tools/bin" YCMD_PEBBLE_SDK2=/sdk2/ YCMD_PEBBLE_SDK3=/sdk
   YCMD_STDLIB=/arm-cs-tools/arm-none-eabi/include/ \
   DEBUG=yes YCMD_PORT=80 YCMD_BINARY=/ycmd/ycmd/__main__.py \
   YCMD_DEFAULT_SETTINGS=/ycmd/ycmd/default_settings.json
-
+ENV PYTHONUNBUFFERED 1
 CMD ["python", "proxy.py"]
