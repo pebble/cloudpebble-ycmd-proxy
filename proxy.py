@@ -38,10 +38,11 @@ def server_ws(process_uuid):
         'goto': ycm_helpers.go_to,
         'create': ycm_helpers.create_file,
         'delete': ycm_helpers.delete_file,
-        'ping': ycm_helpers.ping,
+        'rename': ycm_helpers.rename_file,
         'resources': ycm_helpers.update_resources,
         'messagekeys': ycm_helpers.update_messagekeys,
-        'dependencies': ycm_helpers.update_dependencies
+        'dependencies': ycm_helpers.update_dependencies,
+        'ping': ycm_helpers.ping
     }
 
     # Get the WebSocket from the request context
@@ -82,7 +83,8 @@ def server_ws(process_uuid):
             # Run the specified command with the correct uuid and data
             try:
                 print "Running command: %s" % command
-                result = ws_commands[command](process_uuid, data)
+                ycms = ycm_helpers.get_ycms(process_uuid)
+                result = ws_commands[command](ycms, data)
             except ycm_helpers.YCMProxyException as e:
                 respond(packet_id, e.message, success=False)
                 continue
