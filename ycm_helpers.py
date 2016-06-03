@@ -1,7 +1,6 @@
 #!/usr/bin/env python
-import gevent.monkey;
+import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
 
-gevent.monkey.patch_all(subprocess=True)
 import uuid
 import tempfile
 import os
@@ -11,21 +10,17 @@ import gevent
 import collections
 import traceback
 import atexit
-import subprocess
-import zipfile
-import json
-import glob
-import re
 
 import settings
 from ycm import YCM
 from filesync import FileSync
+from projectinfo import ProjectInfo, RESOURCE_HEADER_NAME, MESSAGEKEY_HEADER_NAME
+from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers
 
 mapping = {}
 
-YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
-CodeCompletion = collections.namedtuple('CodeCompletion',
-                                        ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
+YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'projectinfo', 'ycms'))
+CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
 
 class YCMProxyException(Exception):
@@ -37,6 +32,8 @@ def spinup(content):
     platforms = set(content.get('platforms', ['aplite']))
     sdk_version = content.get('sdk', '2')
     dependencies = content.get('dependencies', {})
+    messagekeys = content.get('messagekeys', [])
+    resources = content.get('resources', [])
 
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
@@ -56,7 +53,21 @@ def spinup(content):
             f.write(file_content.encode('utf-8'))
 
     filesync = FileSync(root_dir)
-    ycms = YCMHolder(filesync=filesync, ycms={})
+
+    install_dependencies(dependencies, root_dir)
+    extract_library_headers(root_dir)
+    lib_resources, lib_messagekeys = get_package_metadata(root_dir)
+
+    info = ProjectInfo(
+        messagekeys=messagekeys,
+        resources=resources,
+        lib_resources=lib_resources,
+        lib_messagekeys=lib_messagekeys
+    )
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+
+    ycms = YCMHolder(filesync=filesync, projectinfo=info, ycms={})
 
     print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
@@ -70,14 +81,9 @@ def spinup(content):
         '3': settings.PEBBLE_SDK3,
     }
 
-    if dependencies:
-        install_dependencies(dependencies, root_dir)
-
     with open(settings_path, "w") as f:
-        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf',
-                               conf_mapping[sdk_version])) as template:
-            f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir,
-                                           stdlib=settings.STDLIB_INCLUDE_PATH))
+        with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ycm_conf', conf_mapping[sdk_version])) as template:
+            f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
         if 'aplite' in platforms:
@@ -110,56 +116,6 @@ def spinup(content):
     print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
     return dict(success=True, uuid=this_uuid)
-
-
-def dump_minimal_package_json(fp, dependencies):
-    return json.dump({
-        "name": "cloudpebble-ycmd-proxy",
-        "version": "1.0.0",
-        "dependencies": dependencies
-    }, fp)
-
-
-def validate_dependencies(dependencies):
-    """ Check that none of the version strings in a dictionary of dependencies reference local paths. """
-    # CloudPebble performs identical checks for this, so hopefully it should never actually get triggered.
-    for version in dependencies.values():
-        if re.match(r'^file:|(\.*|~)/', version):
-            raise ValueError("Dependencies are not allowed to reference paths")
-
-
-def install_dependencies(dependencies, root_dir):
-    validate_dependencies(dependencies)
-    # Make a minimal package.json file referencing all the dependencies
-    package_path = os.path.join(root_dir, 'package.json')
-    with open(package_path, 'w') as f:
-        dump_minimal_package_json(f, dependencies)
-
-    try:
-        # Install all the dependencies
-        # TODO: Should NPM itself have resource limits?
-        # TODO: Should we prune, or delete node_modules?
-        subprocess.check_output([settings.NPM_BINARY, "prune"], stderr=subprocess.STDOUT, cwd=root_dir)
-        subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts"], stderr=subprocess.STDOUT, cwd=root_dir)
-        # Make the libraries directory if it does not exist
-        libs_path = os.path.join(root_dir, 'libraries')
-        if not os.path.isdir(libs_path):
-            os.mkdir(libs_path)
-        # Look for C modules with dist.zip files
-        for zip_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'dist.zip')):
-            # Construct the expected path to the library's headers based on its name
-            includes_path = os.path.join('include', os.path.basename(os.path.dirname(zip_path)))
-            with zipfile.ZipFile(zip_path) as z:
-                # Extract any header files which are inside 'include/<module_name>'
-                for zip_entry in z.infolist():
-                    if zip_entry.filename.startswith(includes_path) and zip_entry.filename.endswith('.h'):
-                        z.extract(zip_entry, libs_path)
-    except subprocess.CalledProcessError as e:
-        print e.output
-        raise
-    finally:
-        # Clean up
-        os.unlink(package_path)
 
 
 def get_completions(process_uuid, data):
@@ -230,7 +186,36 @@ def update_dependencies(process_uuid, data):
     if process_uuid not in mapping:
         raise YCMProxyException("UUID not found")
     ycms = mapping[process_uuid]
-    install_dependencies(data['dependencies'], ycms.filesync.root_dir)
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    install_dependencies(data['dependencies'], filesync.root_dir)
+    extract_library_headers(filesync.root_dir)
+    new_resources, new_messagekeys = get_package_metadata(filesync.root_dir)
+
+    info.lib_resources = new_resources
+    info.lib_messagekeys = new_messagekeys
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+
+
+def update_resources(process_uuid, data):
+    if process_uuid not in mapping:
+        raise YCMProxyException("UUID not found")
+    ycms = mapping[process_uuid]
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    info.resources = data['resources']
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+
+
+def update_messagekeys(process_uuid, data):
+    if process_uuid not in mapping:
+        raise YCMProxyException("UUID not found")
+    ycms = mapping[process_uuid]
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    info.messagekeys = data['messagekeys']
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
 
 
 def create_file(process_uuid, data):

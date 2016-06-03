@@ -16,6 +16,8 @@ int main(void) {
 }
 """
 
+LIBNAME = 'spacerat/libname'
+LIBRARY_EXPECTED_COMPLETION = 'world'
 LIBRARIES_CONTENT = """
 #include <pebble.h>
 #include "libname/whatever.h"
@@ -54,12 +56,12 @@ class TestYCM(unittest.TestCase):
         try:
             uuid = self.spinup({
                 'files': {'main.c': LIBRARIES_CONTENT},
-                'dependencies': {'libname': 'Spacerat/libname'}
+                'dependencies': {'libname': LIBNAME}
             })
         except subprocess.CalledProcessError as e:
             print e.output
             raise
-        self.expect_completion(uuid, 6, 6, 'world')
+        self.expect_completion(uuid, 6, 6, LIBRARY_EXPECTED_COMPLETION)
 
     def test_bad_dependency(self):
         """ Check that YCM fails to spinup if unsafe dependencies are specified. """
@@ -68,7 +70,3 @@ class TestYCM(unittest.TestCase):
                 'files': {'main.c': LIBRARIES_CONTENT},
                 'dependencies': {'libname': '../local/file'}
             })
-
-
-if __name__ == '__main__':
-    unittest.main()
