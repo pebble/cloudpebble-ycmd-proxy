@@ -15,7 +15,7 @@ import settings
 from ycm import YCM
 from filesync import FileSync
 from projectinfo import ProjectInfo, RESOURCE_HEADER_NAME, MESSAGEKEY_HEADER_NAME
-from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers
+from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers, NPMInstallError
 
 mapping = {}
 
@@ -54,9 +54,14 @@ def spinup(content):
 
     filesync = FileSync(root_dir)
 
-    install_dependencies(dependencies, root_dir)
-    extract_library_headers(root_dir)
-    lib_resources, lib_messagekeys = get_package_metadata(root_dir)
+    # Just ignore NPM failures on spinup since we don't wait them to kill YCM completely.
+    # The user will notice that something is wrong when their includes all show as errors.
+    try:
+        install_dependencies(dependencies, root_dir)
+        extract_library_headers(root_dir)
+        lib_resources, lib_messagekeys = get_package_metadata(root_dir)
+    except NPMInstallError:
+        lib_resources, lib_messagekeys = ([], [])
 
     info = ProjectInfo(
         messagekeys=messagekeys,

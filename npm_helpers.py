@@ -11,6 +11,10 @@ import settings
 from projectinfo import Resource
 
 
+class NPMInstallError(Exception):
+    pass
+
+
 @contextlib.contextmanager
 def temporary_package_json(root_dir, dependencies):
     package_path = os.path.join(root_dir, 'package.json')
@@ -19,6 +23,9 @@ def temporary_package_json(root_dir, dependencies):
             json.dump({
                 "name": "cloudpebble-ycmd-proxy",
                 "version": "1.0.0",
+                "description": "A temporary package.json",
+                "repository": None,
+                "license": "",
                 "dependencies": dependencies
             }, f)
         yield
@@ -49,9 +56,9 @@ def install_dependencies(dependencies, root_dir):
             subprocess.check_output([settings.NPM_BINARY, "prune"], stderr=subprocess.STDOUT, cwd=root_dir)
             if dependencies:
                 subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts"], stderr=subprocess.STDOUT, cwd=root_dir)
-        except subprocess.CalledProcessError as e:
-            print e.output
-            raise
+        except subprocess.CalledProcessError:
+            # Setting the error message to e.output here would let the user see their lovely NPM error output.
+            raise NPMInstallError("One or more of your dependencies cannot be installed. Please check that the names and versions for all of your dependencies are valid.")
 
 
 def get_package_metadata(root_dir):
@@ -61,12 +68,15 @@ def get_package_metadata(root_dir):
     """
     resources = []
     messagekeys = []
-    for package_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'package.json')):
-        with open(package_path, 'r') as f:
-            data = json.load(f)
-            messagekeys.extend(data['pebble'].get('messageKeys', []))
-            resources.extend(Resource(r['type'], r['name']) for r in data['pebble'].get('resources', {}).get('media', []))
-    return resources, messagekeys
+    try:
+        for package_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'package.json')):
+            with open(package_path, 'r') as f:
+                data = json.load(f)
+                messagekeys.extend(data['pebble'].get('messageKeys', []))
+                resources.extend(Resource(r['type'], r['name']) for r in data['pebble'].get('resources', {}).get('media', []))
+        return resources, messagekeys
+    except Exception:
+        raise NPMInstallError("One or more of your dependencies is not a valid pebble library.")
 
 
 def extract_library_headers(root_dir):
@@ -81,10 +91,13 @@ def extract_library_headers(root_dir):
     os.mkdir(libs_path)
     # Look for C modules with dist.zip files
     for zip_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'dist.zip')):
-        # Construct the expected path to the library's headers based on its name
-        includes_path = os.path.join('include', os.path.basename(os.path.dirname(zip_path)))
-        with zipfile.ZipFile(zip_path) as z:
-            # Extract any header files which are inside 'include/<module_name>'
-            for zip_entry in z.infolist():
-                if zip_entry.filename.startswith(includes_path) and zip_entry.filename.endswith('.h'):
-                    z.extract(zip_entry, libs_path)
+        try:
+            # Construct the expected path to the library's headers based on its name
+            includes_path = os.path.join('include', os.path.basename(os.path.dirname(zip_path)))
+            with zipfile.ZipFile(zip_path) as z:
+                # Extract any header files which are inside 'include/<module_name>'
+                for zip_entry in z.infolist():
+                    if zip_entry.filename.startswith(includes_path) and zip_entry.filename.endswith('.h'):
+                        z.extract(zip_entry, libs_path)
+        except Exception:
+            raise NPMInstallError("One or more of your dependencies is not a valid pebble library.")
