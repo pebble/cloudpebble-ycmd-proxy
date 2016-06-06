@@ -52,7 +52,6 @@ def install_dependencies(dependencies, root_dir):
         try:
             # Install all the dependencies
             # TODO: Should NPM itself have resource limits?
-            # TODO: Should we prune, or delete node_modules?
             subprocess.check_output([settings.NPM_BINARY, "prune"], stderr=subprocess.STDOUT, cwd=root_dir)
             if dependencies:
                 subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts"], stderr=subprocess.STDOUT, cwd=root_dir)
@@ -68,15 +67,14 @@ def get_package_metadata(root_dir):
     """
     resources = []
     messagekeys = []
-    try:
-        for package_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'package.json')):
-            with open(package_path, 'r') as f:
-                data = json.load(f)
-                messagekeys.extend(data['pebble'].get('messageKeys', []))
-                resources.extend(Resource(r['type'], r['name']) for r in data['pebble'].get('resources', {}).get('media', []))
-        return resources, messagekeys
-    except Exception:
-        raise NPMInstallError("One or more of your dependencies is not a valid pebble library.")
+    for package_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'package.json')):
+        with open(package_path, 'r') as f:
+            data = json.load(f)
+            if 'pebble' not in data:
+                continue
+            messagekeys.extend(data['pebble'].get('messageKeys', []))
+            resources.extend(Resource(r['type'], r['name']) for r in data['pebble'].get('resources', {}).get('media', []))
+    return resources, messagekeys
 
 
 def extract_library_headers(root_dir):
