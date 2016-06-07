@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
+
 import uuid
 import tempfile
 import os
@@ -13,10 +14,12 @@ import atexit
 import settings
 from ycm import YCM
 from filesync import FileSync
+from projectinfo import ProjectInfo, RESOURCE_HEADER_NAME, MESSAGEKEY_HEADER_NAME
+from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers, NPMInstallError
 
 mapping = {}
 
-YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'ycms'))
+YCMHolder = collections.namedtuple('YCMHolder', ('filesync', 'projectinfo', 'ycms'))
 CodeCompletion = collections.namedtuple('CodeCompletion', ('kind', 'insertion_text', 'extra_menu_info', 'detailed_info'))
 
 
@@ -28,9 +31,13 @@ def spinup(content):
     root_dir = tempfile.mkdtemp()
     platforms = set(content.get('platforms', ['aplite']))
     sdk_version = content.get('sdk', '2')
+    dependencies = content.get('dependencies', {})
+    messagekeys = content.get('messagekeys', [])
+    resources = content.get('resources', [])
+
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
-    for path, content in content['files'].iteritems():
+    for path, file_content in content['files'].iteritems():
         abs_path = os.path.normpath(os.path.join(root_dir, path))
         if not abs_path.startswith(root_dir):
             raise Exception("Failed: escaped root directory.")
@@ -43,10 +50,29 @@ def spinup(content):
             else:
                 raise
         with open(abs_path, 'w') as f:
-            f.write(content.encode('utf-8'))
+            f.write(file_content.encode('utf-8'))
 
     filesync = FileSync(root_dir)
-    ycms = YCMHolder(filesync=filesync, ycms={})
+
+    # Just ignore NPM failures on spinup since we don't wait them to kill YCM completely.
+    # The user will notice that something is wrong when their includes all show as errors.
+    try:
+        install_dependencies(dependencies, root_dir)
+        extract_library_headers(root_dir)
+        lib_resources, lib_messagekeys = get_package_metadata(root_dir)
+    except NPMInstallError:
+        lib_resources, lib_messagekeys = ([], [])
+
+    info = ProjectInfo(
+        messagekeys=messagekeys,
+        resources=resources,
+        lib_resources=lib_resources,
+        lib_messagekeys=lib_messagekeys
+    )
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+
+    ycms = YCMHolder(filesync=filesync, projectinfo=info, ycms={})
 
     print "created files"
     settings_path = os.path.join(root_dir, ".ycm_extra_conf.py")
@@ -159,6 +185,42 @@ def go_to(process_uuid, data):
         if result is not None:
             return dict(location=result)
     return dict(location=None)
+
+
+def update_dependencies(process_uuid, data):
+    if process_uuid not in mapping:
+        raise YCMProxyException("UUID not found")
+    ycms = mapping[process_uuid]
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    install_dependencies(data['dependencies'], filesync.root_dir)
+    extract_library_headers(filesync.root_dir)
+    new_resources, new_messagekeys = get_package_metadata(filesync.root_dir)
+
+    info.lib_resources = new_resources
+    info.lib_messagekeys = new_messagekeys
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+
+
+def update_resources(process_uuid, data):
+    if process_uuid not in mapping:
+        raise YCMProxyException("UUID not found")
+    ycms = mapping[process_uuid]
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    info.resources = data['resources']
+    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+
+
+def update_messagekeys(process_uuid, data):
+    if process_uuid not in mapping:
+        raise YCMProxyException("UUID not found")
+    ycms = mapping[process_uuid]
+    info = ycms.projectinfo
+    filesync = ycms.filesync
+    info.messagekeys = data['messagekeys']
+    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
 
 
 def create_file(process_uuid, data):

@@ -38,7 +38,10 @@ def server_ws(process_uuid):
         'goto': ycm_helpers.go_to,
         'create': ycm_helpers.create_file,
         'delete': ycm_helpers.delete_file,
-        'ping': ycm_helpers.ping
+        'ping': ycm_helpers.ping,
+        'resources': ycm_helpers.update_resources,
+        'messagekeys': ycm_helpers.update_messagekeys,
+        'dependencies': ycm_helpers.update_dependencies
     }
 
     # Get the WebSocket from the request context
