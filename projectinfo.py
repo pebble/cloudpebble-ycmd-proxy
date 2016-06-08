@@ -21,7 +21,7 @@ class ProjectInfo(object):
         self.lib_resources = lib_resources if lib_resources else []
 
     def get_merged_messagekeys(self):
-        return sorted(set(k.upper() for k in chain(self.messagekeys, self.lib_messagekeys)))
+        return sorted(set(chain(self.messagekeys, self.lib_messagekeys)))
 
     def make_messagekey_header(self):
         merged_keys = self.get_merged_messagekeys()
@@ -31,10 +31,10 @@ class ProjectInfo(object):
         out = set()
         for kind, resource_id in chain(self.resources, self.lib_resources):
             if kind == 'png-trans':
-                out.add("%s_BLACK" % resource_id.upper())
-                out.add("%s_WHITE" % resource_id.upper())
+                out.add("%s_BLACK" % resource_id)
+                out.add("%s_WHITE" % resource_id)
             else:
-                out.add(resource_id.upper())
+                out.add(resource_id)
         return sorted(out)
 
     def make_resource_ids_header(self):
