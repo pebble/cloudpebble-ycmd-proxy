@@ -91,23 +91,12 @@ def spinup(content):
             f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
-        if 'aplite' in platforms:
-            ycm = YCM(filesync, 'aplite')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['aplite'] = ycm
-
-        if 'basalt' in platforms:
-            ycm = YCM(filesync, 'basalt')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['basalt'] = ycm
-
-        if 'chalk' in platforms:
-            ycm = YCM(filesync, 'chalk')
-            ycm.wait()
-            ycm.apply_settings(settings_path)
-            ycms.ycms['chalk'] = ycm
+        for platform in ('aplite', 'basalt', 'chalk', 'diorite'):
+            if platform in platforms:
+                ycm = YCM(filesync, platform)
+                ycm.wait()
+                ycm.apply_settings(settings_path)
+                ycms.ycms[platform] = ycm
 
     except Exception as e:
         print "Failed to spawn ycm with root_dir %s" % root_dir

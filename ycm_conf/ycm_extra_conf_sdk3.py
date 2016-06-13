@@ -89,6 +89,37 @@ elif os.environ['PLATFORM'] == 'chalk':
             ],
             'do_cache': True,
         }}
+elif os.environ['PLATFORM'] == 'diorite':
+    # TODO: Diorite - is this all correct?
+    def FlagsForFile(filename, **kwargs):
+        return {{
+            'flags': [
+                '-std=c11',
+                '-x',
+                'c',
+                '-Wall',
+                '-Wextra',
+                '-Werror',
+                '-Wno-unused-parameter',
+                '-Wno-error=unused-function',
+                '-Wno-error=unused-variable',
+                '-I{sdk}/pebble/diorite/include',
+                '-I{here}/build',
+                '-I{here}',
+                '-I{here}/build/src',
+                '-I{here}/src',
+                '-I{here}/libraries/include',
+                '-isystem',
+                '{stdlib}',
+                '-DRELEASE',
+                '-DPBL_PLATFORM_DIORITE',
+                '-DPBL_BW',
+                '-DPBL_SDK_3',
+                '-DPBL_RECT',
+                '-D_TIME_H_',
+            ],
+            'do_cache': True,
+        }}
 
 else:
     raise Exception("Need a platform.")
