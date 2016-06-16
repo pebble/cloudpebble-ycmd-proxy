@@ -61,6 +61,12 @@ def install_dependencies(dependencies, root_dir):
             raise NPMInstallError("One or more of your dependencies cannot be installed. Please check that the names and versions for all of your dependencies are valid.")
 
 
+def _recursive_file_search(base, filename):
+    for dirname, _, filenames in os.walk(base):
+        if filename in filenames:
+            yield os.path.join(dirname, filename)
+
+
 def get_package_metadata(root_dir):
     """ Given a directory with a node_modules directory full of pebble modules, get all of their messageKeys and resource type/name information
     :param root_dir:
@@ -68,7 +74,7 @@ def get_package_metadata(root_dir):
     """
     resources = []
     messagekeys = []
-    for package_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'package.json')):
+    for package_path in _recursive_file_search(os.path.join(root_dir, 'node_modules'), 'package.json'):
         with open(package_path, 'r') as f:
             data = json.load(f)
             if 'pebble' not in data:
@@ -86,13 +92,13 @@ def extract_library_headers(root_dir):
     libs_path = os.path.join(root_dir, 'libraries')
     if os.path.isdir(libs_path):
         shutil.rmtree(libs_path)
-
+    node_modules = os.path.join(root_dir, 'node_modules')
     os.mkdir(libs_path)
     # Look for C modules with dist.zip files
-    for zip_path in glob.glob(os.path.join(root_dir, 'node_modules', '*', 'dist.zip')):
+    for zip_path in _recursive_file_search(node_modules, 'dist.zip'):
         try:
             # Construct the expected path to the library's headers based on its name
-            includes_path = os.path.join('include', os.path.basename(os.path.dirname(zip_path)))
+            includes_path = os.path.join('include', os.path.dirname(os.path.relpath(zip_path, node_modules)))
             with zipfile.ZipFile(zip_path) as z:
                 # Extract any header files which are inside 'include/<module_name>'
                 for zip_entry in z.infolist():
