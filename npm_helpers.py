@@ -6,7 +6,7 @@ import re
 import shutil
 import subprocess
 import zipfile
-
+from collections import defaultdict
 import settings
 from projectinfo import Resource
 
@@ -103,6 +103,25 @@ def extract_library_headers(root_dir):
                 # Extract any header files which are inside 'include/<module_name>'
                 for zip_entry in z.infolist():
                     if zip_entry.filename.startswith(includes_path) and zip_entry.filename.endswith('.h'):
-                        z.extract(zip_entry, libs_path)
+                        extracted_to = z.extract(zip_entry, libs_path)
+                        if not extracted_to.endswith('auto.h'):
+                            yield os.path.relpath(extracted_to, os.path.join(libs_path, 'include'))
+
         except Exception:
             raise NPMInstallError("One or more of your dependencies is not a valid pebble library.")
+
+
+def _startswith_any(str, options):
+    for x in options:
+        if str.startswith(x):
+            return x
+    return None
+
+
+def get_non_transitive_headers(dependencies, library_headers):
+    deps = defaultdict(list)
+    for header in library_headers:
+        dep = _startswith_any(header, dependencies)
+        if dep:
+            deps[dep].append(header)
+    return deps

@@ -15,7 +15,7 @@ import settings
 from ycm import YCM
 from filesync import FileSync
 from projectinfo import ProjectInfo, RESOURCE_HEADER_NAME, MESSAGEKEY_HEADER_NAME
-from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers, NPMInstallError
+from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers, NPMInstallError, get_non_transitive_headers
 
 mapping = {}
 
@@ -34,6 +34,7 @@ def spinup(content):
     dependencies = content.get('dependencies', {})
     messagekeys = content.get('messagekeys', [])
     resources = content.get('resources', [])
+    npm_error = None
 
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
@@ -58,10 +59,12 @@ def spinup(content):
     # The user will notice that something is wrong when their includes all show as errors.
     try:
         install_dependencies(dependencies, root_dir)
-        extract_library_headers(root_dir)
+        header_names = get_non_transitive_headers(dependencies, extract_library_headers(root_dir))
         lib_resources, lib_messagekeys = get_package_metadata(root_dir)
-    except NPMInstallError:
+    except NPMInstallError as e:
+        header_names = []
         lib_resources, lib_messagekeys = ([], [])
+        npm_error = str(e)
 
     info = ProjectInfo(
         messagekeys=messagekeys,
@@ -120,7 +123,7 @@ def spinup(content):
     # print mapping
     print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
-    return dict(success=True, uuid=this_uuid)
+    return dict(success=True, uuid=this_uuid, header_names=header_names, npm_error=npm_error)
 
 
 def get_completions(ycms, data):
@@ -188,13 +191,14 @@ def update_dependencies(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
     install_dependencies(data['dependencies'], filesync.root_dir)
-    extract_library_headers(filesync.root_dir)
+    header_names = get_non_transitive_headers(data['dependencies'], extract_library_headers(filesync.root_dir))
     new_resources, new_messagekeys = get_package_metadata(filesync.root_dir)
 
     info.lib_resources = new_resources
     info.lib_messagekeys = new_messagekeys
     filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
     filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+    return header_names
 
 
 def update_resources(ycms, data):
