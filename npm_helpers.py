@@ -1,12 +1,10 @@
 import contextlib
-import glob
 import json
 import os
 import re
 import shutil
 import subprocess
 import zipfile
-from collections import defaultdict
 import settings
 from projectinfo import Resource
 
@@ -61,10 +59,13 @@ def install_dependencies(dependencies, root_dir):
             raise NPMInstallError("One or more of your dependencies cannot be installed. Please check that the names and versions for all of your dependencies are valid.")
 
 
-def _recursive_file_search(base, filename):
-    for dirname, _, filenames in os.walk(base):
+def search_node_modules(base, filename, folder='node_modules'):
+    search_root = os.path.join(base, folder)
+    for dirname, _, filenames in os.walk(search_root):
         if filename in filenames:
-            yield os.path.join(dirname, filename)
+            path = os.path.join(dirname, filename)
+            libname = os.path.dirname(os.path.relpath(path, search_root))
+            yield libname, path
 
 
 def get_package_metadata(root_dir):
@@ -74,14 +75,16 @@ def get_package_metadata(root_dir):
     """
     resources = []
     messagekeys = []
-    for package_path in _recursive_file_search(os.path.join(root_dir, 'node_modules'), 'package.json'):
+    versions = {}
+    for libname, package_path in search_node_modules(root_dir, 'package.json'):
         with open(package_path, 'r') as f:
             data = json.load(f)
             if 'pebble' not in data:
                 continue
-            messagekeys.extend(data['pebble'].get('messageKeys', []))
-            resources.extend(Resource(r['type'], r['name']) for r in data['pebble'].get('resources', {}).get('media', []))
-    return resources, messagekeys
+            messagekeys.extend(data.get('pebble', {}).get('messageKeys', []))
+            resources.extend(Resource(r['type'], r['name']) for r in data.get('pebble', {}).get('resources', {}).get('media', []))
+            versions[libname] = data.get('version', None)
+    return resources, messagekeys, versions
 
 
 def extract_library_headers(root_dir):
@@ -92,13 +95,12 @@ def extract_library_headers(root_dir):
     libs_path = os.path.join(root_dir, 'libraries')
     if os.path.isdir(libs_path):
         shutil.rmtree(libs_path)
-    node_modules = os.path.join(root_dir, 'node_modules')
     os.mkdir(libs_path)
     # Look for C modules with dist.zip files
-    for zip_path in _recursive_file_search(node_modules, 'dist.zip'):
+    for libname, zip_path in search_node_modules(root_dir, 'dist.zip'):
         try:
             # Construct the expected path to the library's headers based on its name
-            includes_path = os.path.join('include', os.path.dirname(os.path.relpath(zip_path, node_modules)))
+            includes_path = os.path.join('include', libname)
             with zipfile.ZipFile(zip_path) as z:
                 # Extract any header files which are inside 'include/<module_name>'
                 for zip_entry in z.infolist():
@@ -118,10 +120,32 @@ def _startswith_any(str, options):
     return None
 
 
-def get_non_transitive_headers(dependencies, library_headers):
-    deps = defaultdict(list)
-    for header in library_headers:
+def make_library_info(dependencies, versions, headers):
+    libs = {}
+    for name, version in versions.iteritems():
+        if version and name in dependencies:
+            libs[name] = {
+                'headers': [],
+                'version': version
+            }
+
+    for header in headers:
         dep = _startswith_any(header, dependencies)
-        if dep:
-            deps[dep].append(header)
-    return deps
+        if dep and dep in libs:
+            libs[dep]['headers'].append(header)
+    return libs
+
+
+def setup_dependencies(dependencies, root_dir):
+    install_dependencies(dependencies, root_dir)
+    lib_headers = extract_library_headers(root_dir)
+    lib_resources, lib_messagekeys, lib_versions = get_package_metadata(root_dir)
+    lib_info = make_library_info(dependencies, lib_versions, lib_headers)
+    return lib_info, lib_messagekeys, lib_resources
+
+
+def try_setup_dependencies(dependencies, root_dir):
+    try:
+        return setup_dependencies(dependencies, root_dir), None
+    except NPMInstallError as e:
+        return ({}, [], []), str(e)

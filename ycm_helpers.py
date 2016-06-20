@@ -15,7 +15,7 @@ import settings
 from ycm import YCM
 from filesync import FileSync
 from projectinfo import ProjectInfo, RESOURCE_HEADER_NAME, MESSAGEKEY_HEADER_NAME
-from npm_helpers import install_dependencies, get_package_metadata, extract_library_headers, NPMInstallError, get_non_transitive_headers
+from npm_helpers import try_setup_dependencies, setup_dependencies
 
 mapping = {}
 
@@ -34,7 +34,6 @@ def spinup(content):
     dependencies = content.get('dependencies', {})
     messagekeys = content.get('messagekeys', [])
     resources = content.get('resources', [])
-    npm_error = None
 
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
@@ -57,14 +56,7 @@ def spinup(content):
 
     # Just ignore NPM failures on spinup since we don't wait them to kill YCM completely.
     # The user will notice that something is wrong when their includes all show as errors.
-    try:
-        install_dependencies(dependencies, root_dir)
-        header_names = get_non_transitive_headers(dependencies, extract_library_headers(root_dir))
-        lib_resources, lib_messagekeys = get_package_metadata(root_dir)
-    except NPMInstallError as e:
-        header_names = []
-        lib_resources, lib_messagekeys = ([], [])
-        npm_error = str(e)
+    (lib_info, lib_messagekeys, lib_resources), npm_error = try_setup_dependencies(dependencies, root_dir)
 
     info = ProjectInfo(
         messagekeys=messagekeys,
@@ -123,7 +115,7 @@ def spinup(content):
     # print mapping
     print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
-    return dict(success=True, uuid=this_uuid, header_names=header_names, npm_error=npm_error)
+    return dict(success=True, uuid=this_uuid, libraries=lib_info, npm_error=npm_error)
 
 
 def get_completions(ycms, data):
@@ -190,15 +182,12 @@ def go_to(ycms, data):
 def update_dependencies(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
-    install_dependencies(data['dependencies'], filesync.root_dir)
-    header_names = get_non_transitive_headers(data['dependencies'], extract_library_headers(filesync.root_dir))
-    new_resources, new_messagekeys = get_package_metadata(filesync.root_dir)
-
+    lib_info, new_messagekeys, new_resources = setup_dependencies(data['dependencies'], filesync.root_dir)
     info.lib_resources = new_resources
     info.lib_messagekeys = new_messagekeys
     filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
     filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
-    return header_names
+    return {'libraries': lib_info}
 
 
 def update_resources(ycms, data):
