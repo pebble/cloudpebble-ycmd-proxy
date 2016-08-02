@@ -16,16 +16,14 @@ int main(void) {
 }
 """
 
-LIBNAME = 'spacerat/libname'
-LIBRARY_EXPECTED_COMPLETION = 'world'
 LIBRARIES_CONTENT = """
 #include <pebble.h>
-#include "libname/whatever.h"
+#include "{include}"
 
-int main(void) {
-  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hello %s", world());
-  worl
-}
+int main(void) {{
+  APP_LOG(APP_LOG_LEVEL_DEBUG, "Hello world");
+  {text}
+}}
 """
 
 
@@ -55,13 +53,25 @@ class TestYCM(unittest.TestCase):
         """ Check that YCM can autocomplete on external libraries. """
         try:
             uuid = self.spinup({
-                'files': {'main.c': LIBRARIES_CONTENT},
-                'dependencies': {'libname': LIBNAME}
+                'files': {'main.c': LIBRARIES_CONTENT.format(include="libname/whatever.h", text="worl")},
+                'dependencies': {'libname': 'spacerat/libname'}
             })
         except subprocess.CalledProcessError as e:
             print e.output
             raise
-        self.expect_completion(uuid, 6, 6, LIBRARY_EXPECTED_COMPLETION)
+        self.expect_completion(uuid, 6, 6, 'world')
+
+    def test_namespaced_dependencies(self):
+        """ Check that YCM can autocomplete on namespaced external libraries. """
+        try:
+            uuid = self.spinup({
+                'files': {'main.c': LIBRARIES_CONTENT.format(include="@smallstoneapps/linked-list/linked-list.h", text="linked_lis")},
+                'dependencies': {'@smallstoneapps/linked-list': "^1.2.1"}
+            })
+        except subprocess.CalledProcessError as e:
+            print e.output
+            raise
+        self.expect_completion(uuid, 6, 12, 'linked_list_insert')
 
     def test_bad_dependency(self):
         """ Check that YCM fails to spinup if unsafe dependencies are specified. """
