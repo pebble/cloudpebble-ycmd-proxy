@@ -113,13 +113,6 @@ def extract_library_headers(root_dir):
             raise NPMInstallError("One or more of your dependencies is not a valid pebble library.")
 
 
-def _startswith_any(str, options):
-    for x in options:
-        if str.startswith(x):
-            return x
-    return None
-
-
 def make_library_info(dependencies, versions, headers):
     libs = {}
     for name, version in versions.iteritems():
@@ -130,7 +123,7 @@ def make_library_info(dependencies, versions, headers):
             }
 
     for header in headers:
-        dep = _startswith_any(header, dependencies)
+        dep = header.startswith(tuple(dependencies))
         if dep and dep in libs:
             libs[dep]['headers'].append(header)
     return libs
