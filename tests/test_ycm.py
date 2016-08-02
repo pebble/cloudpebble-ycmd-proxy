@@ -1,6 +1,6 @@
 """ These are integration tests which just exist to help with development. They are not particularly exhaustive are not
 run automatically.
-The dependencies test relies on the the git repo Spacerat/libname existing. """
+The dependencies test relies on the the git repo Katharine/pebble-events existing. """
 
 import unittest
 import subprocess
@@ -53,13 +53,13 @@ class TestYCM(unittest.TestCase):
         """ Check that YCM can autocomplete on external libraries. """
         try:
             uuid = self.spinup({
-                'files': {'main.c': LIBRARIES_CONTENT.format(include="libname/whatever.h", text="worl")},
-                'dependencies': {'libname': 'spacerat/libname'}
+                'files': {'main.c': LIBRARIES_CONTENT.format(include="pebble-events/pebble-events.h", text="even")},
+                'dependencies': {'pebble-events': '^1.0.0'}
             })
         except subprocess.CalledProcessError as e:
             print e.output
             raise
-        self.expect_completion(uuid, 6, 6, 'world')
+        self.expect_completion(uuid, 6, 6, 'events_health_service_events_unsubscribe')
 
     def test_namespaced_dependencies(self):
         """ Check that YCM can autocomplete on namespaced external libraries. """
