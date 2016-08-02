@@ -37,8 +37,8 @@ class FileSync(object):
                     merged_line += lines[end['line']][end['ch']:]
                 content.append(merged_line)
                 # Add the lines from the end through to the end.
-                if len(lines) > end['line']+1:
-                    content.extend(lines[end['line']+1:])
+                if len(lines) > end['line'] + 1:
+                    content.extend(lines[end['line'] + 1:])
 
             # Writeback.
             with open(abs_path, 'w') as f:
@@ -56,6 +56,13 @@ class FileSync(object):
                 raise
         with open(path, 'w') as f:
             f.write(content)
+
+    def rename_file(self, path, new_path):
+        path = self.abs_path(path)
+        new_path = self.abs_path(new_path)
+        if os.path.exists(new_path):
+            raise Exception("Cannot rename file, path already exists")
+        os.rename(path, new_path)
 
     def delete_file(self, path):
         path = self.abs_path(path)

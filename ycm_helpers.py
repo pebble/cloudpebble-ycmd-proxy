@@ -123,10 +123,7 @@ def spinup(content):
     return dict(success=True, uuid=this_uuid)
 
 
-def get_completions(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def get_completions(ycms, data):
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
     completions = collections.OrderedDict()
@@ -147,10 +144,13 @@ def get_completions(process_uuid, data):
     )
 
 
-def get_errors(process_uuid, data):
+def get_ycms(process_uuid):
     if process_uuid not in mapping:
         raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+    return mapping[process_uuid]
+
+
+def get_errors(ycms, data):
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
     errors = {}
@@ -173,10 +173,7 @@ def get_errors(process_uuid, data):
     )
 
 
-def go_to(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def go_to(ycms, data):
     if 'patches' in data:
         ycms.filesync.apply_patches(data['patches'])
     for platform, ycm in sorted(ycms.ycms.iteritems(), reverse=True):
@@ -187,10 +184,7 @@ def go_to(process_uuid, data):
     return dict(location=None)
 
 
-def update_dependencies(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def update_dependencies(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
     install_dependencies(data['dependencies'], filesync.root_dir)
@@ -203,44 +197,34 @@ def update_dependencies(process_uuid, data):
     filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
 
 
-def update_resources(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def update_resources(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
     info.resources = data['resources']
     filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
 
 
-def update_messagekeys(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def update_messagekeys(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
     info.messagekeys = data['messagekeys']
     filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
 
 
-def create_file(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def create_file(ycms, data):
     ycms.filesync.create_file(data['filename'], data['content'])
 
 
-def delete_file(process_uuid, data):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    ycms = mapping[process_uuid]
+def delete_file(ycms, data):
     ycms.filesync.delete_file(data['filename'])
 
 
-def ping(process_uuid, data=None):
-    if process_uuid not in mapping:
-        raise YCMProxyException("UUID not found")
-    for ycm in mapping[process_uuid].ycms.itervalues():
+def rename_file(ycms, data):
+    ycms.filesync.rename_file(data['filename'], data['new_filename'])
+
+
+def ping(ycms, data=None):
+    for ycm in ycms.ycms.itervalues():
         if not ycm.ping():
             raise YCMProxyException("Failed to ping YCM")
 
