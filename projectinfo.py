@@ -8,7 +8,7 @@ MESSAGEKEY_HEADER_NAME = 'build/src/message_keys.auto.h'
 
 
 class ProjectInfo(object):
-    def __init__(self, messagekeys=None, resources=None, lib_messagekeys=None, lib_resources=None):
+    def __init__(self, messagekeys=None, resources=None, published_media=None, lib_messagekeys=None, lib_resources=None):
         """ Set up the initial data for a ProjectInfo object
         :param messagekeys: An array of messagekey strings belonging to the app
         :param resources: An array of Resource objects/tuples belonging to the app
@@ -19,6 +19,7 @@ class ProjectInfo(object):
         self.resources = resources if resources else []
         self.lib_messagekeys = lib_messagekeys if lib_messagekeys else []
         self.lib_resources = lib_resources if lib_resources else []
+        self.published_media = published_media if published_media else []
 
     def get_merged_messagekeys(self):
         return sorted(set(chain(self.messagekeys, self.lib_messagekeys)))
@@ -39,4 +40,8 @@ class ProjectInfo(object):
 
     def make_resource_ids_header(self):
         merged_keys = self.get_merged_resource_ids()
-        return '#pragma once\n\n' + ''.join('#define RESOURCE_ID_%s %d\n' % (name, i + 1) for i, name in enumerate(merged_keys))
+        return '\n'.join([
+            '#pragma once\n',
+            ''.join('#define RESOURCE_ID_%s %d\n' % (name, i + 1) for i, name in enumerate(merged_keys)),
+            ''.join('#define PUBLISHED_ID_%s %d\n' % (name, i + 1) for i, name in enumerate(self.published_media))
+        ])

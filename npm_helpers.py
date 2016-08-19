@@ -76,15 +76,17 @@ def get_package_metadata(root_dir):
     resources = []
     messagekeys = []
     versions = {}
+    published_media = set()
     for libname, package_path in search_node_modules(root_dir, 'package.json'):
         with open(package_path, 'r') as f:
             data = json.load(f)
             if 'pebble' not in data:
                 continue
             messagekeys.extend(data.get('pebble', {}).get('messageKeys', []))
+            published_media.update(x['name'] for x in data.get('pebble', {}).get('publishedMedia', []) if 'name' in x)
             resources.extend(Resource(r['type'], r['name']) for r in data.get('pebble', {}).get('resources', {}).get('media', []))
             versions[libname] = data.get('version', None)
-    return resources, messagekeys, versions
+    return resources, messagekeys, versions, list(published_media)
 
 
 def extract_library_headers(root_dir):
@@ -132,13 +134,13 @@ def make_library_info(dependencies, versions, headers):
 def setup_dependencies(dependencies, root_dir):
     install_dependencies(dependencies, root_dir)
     lib_headers = extract_library_headers(root_dir)
-    lib_resources, lib_messagekeys, lib_versions = get_package_metadata(root_dir)
+    lib_resources, lib_messagekeys, lib_versions, published_media = get_package_metadata(root_dir)
     lib_info = make_library_info(dependencies, lib_versions, lib_headers)
-    return lib_info, lib_messagekeys, lib_resources
+    return lib_info, lib_messagekeys, lib_resources, published_media
 
 
 def try_setup_dependencies(dependencies, root_dir):
     try:
         return setup_dependencies(dependencies, root_dir), None
     except NPMInstallError as e:
-        return ({}, [], []), str(e)
+        return ({}, [], [], []), str(e)

@@ -40,6 +40,7 @@ def server_ws(process_uuid):
         'delete': ycm_helpers.delete_file,
         'rename': ycm_helpers.rename_file,
         'resources': ycm_helpers.update_resources,
+        'published_media': ycm_helpers.update_published_media,
         'messagekeys': ycm_helpers.update_messagekeys,
         'dependencies': ycm_helpers.update_dependencies,
         'ping': ycm_helpers.ping

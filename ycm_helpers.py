@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-import gevent.monkey; gevent.monkey.patch_all(subprocess=True)
+import gevent.monkey;
+
+gevent.monkey.patch_all(subprocess=True)
 
 import uuid
 import tempfile
@@ -34,6 +36,7 @@ def spinup(content):
     dependencies = content.get('dependencies', {})
     messagekeys = content.get('messagekeys', [])
     resources = content.get('resources', [])
+    published_meida = content.get('published_media', [])
 
     print "spinup in %s" % root_dir
     # Dump all the files we should need.
@@ -56,11 +59,12 @@ def spinup(content):
 
     # Just ignore NPM failures on spinup since we don't wait them to kill YCM completely.
     # The user will notice that something is wrong when their includes all show as errors.
-    (lib_info, lib_messagekeys, lib_resources), npm_error = try_setup_dependencies(dependencies, root_dir)
+    (lib_info, lib_messagekeys, lib_resources, lib_published_media), npm_error = try_setup_dependencies(dependencies, root_dir)
 
     info = ProjectInfo(
         messagekeys=messagekeys,
         resources=resources,
+        published_media=published_meida,
         lib_resources=lib_resources,
         lib_messagekeys=lib_messagekeys
     )
@@ -115,7 +119,7 @@ def spinup(content):
     # print mapping
     print "spinup complete (%s); %s -> %s" % (platforms, this_uuid, root_dir)
     # victory!
-    return dict(success=True, uuid=this_uuid, libraries=lib_info, npm_error=npm_error)
+    return dict(success=True, uuid=this_uuid, resources=lib_resources, libraries=lib_info, published_media=lib_published_media, npm_error=npm_error)
 
 
 def get_completions(ycms, data):
@@ -182,26 +186,30 @@ def go_to(ycms, data):
 def update_dependencies(ycms, data):
     info = ycms.projectinfo
     filesync = ycms.filesync
-    lib_info, new_messagekeys, new_resources = setup_dependencies(data['dependencies'], filesync.root_dir)
+    lib_info, new_messagekeys, new_resources, new_published_media = setup_dependencies(data['dependencies'], filesync.root_dir)
     info.lib_resources = new_resources
     info.lib_messagekeys = new_messagekeys
     filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
     filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
-    return {'libraries': lib_info}
+    return {'libraries': lib_info, 'resources': new_resources}
 
 
 def update_resources(ycms, data):
     info = ycms.projectinfo
-    filesync = ycms.filesync
     info.resources = data['resources']
-    filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+    ycms.filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
+
+
+def update_published_media(ycms, data):
+    info = ycms.projectinfo
+    info.published_media = data['published_media']
+    ycms.filesync.create_file(RESOURCE_HEADER_NAME, info.make_resource_ids_header())
 
 
 def update_messagekeys(ycms, data):
     info = ycms.projectinfo
-    filesync = ycms.filesync
     info.messagekeys = data['messagekeys']
-    filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
+    ycms.filesync.create_file(MESSAGEKEY_HEADER_NAME, info.make_messagekey_header())
 
 
 def create_file(ycms, data):
