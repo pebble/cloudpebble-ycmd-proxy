@@ -86,7 +86,7 @@ def spinup(content):
             f.write(template.read().format(sdk=sdk_mapping[sdk_version], here=root_dir, stdlib=settings.STDLIB_INCLUDE_PATH))
 
     try:
-        for platform in ('aplite', 'basalt', 'chalk', 'diorite'):
+        for platform in ('aplite', 'basalt', 'chalk', 'diorite', 'emery'):
             if platform in platforms:
                 ycm = YCM(filesync, platform)
                 ycm.wait()

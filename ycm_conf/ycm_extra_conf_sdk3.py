@@ -32,6 +32,8 @@ if os.environ['PLATFORM'] == 'basalt':
                 '-DPBL_SMARTSTRAP_POWER',
                 '-DPBL_MICROPHONE',
                 '-D_TIME_H_',
+                '-DPBL_DISPLAY_WIDTH=144',
+                '-DPBL_DISPLAY_HEIGHT=168',
             ],
             'do_cache': True,
         }}
@@ -61,7 +63,9 @@ elif os.environ['PLATFORM'] == 'aplite':
                 '-DPBL_BW',
                 '-DPBL_RECT',
                 '-DPBL_SDK_3',
-                '-DPBL_COMPASS'
+                '-DPBL_COMPASS',
+                '-DPBL_DISPLAY_WIDTH=144',
+                '-DPBL_DISPLAY_HEIGHT=168',
             ],
             'do_cache': True,
         }}
@@ -96,12 +100,13 @@ elif os.environ['PLATFORM'] == 'chalk':
                 '-DPBL_SMARTSTRAP',
                 '-DPBL_SMARTSTRAP_POWER',
                 '-DPBL_MICROPHONE',
+                '-DPBL_DISPLAY_WIDTH=180',
+                '-DPBL_DISPLAY_HEIGHT=180',
                 '-D_TIME_H_',
             ],
             'do_cache': True,
         }}
 elif os.environ['PLATFORM'] == 'diorite':
-    # TODO: Diorite - is this all correct?
     def FlagsForFile(filename, **kwargs):
         return {{
             'flags': [
@@ -130,10 +135,48 @@ elif os.environ['PLATFORM'] == 'diorite':
                 '-DPBL_HEALTH',
                 '-DPBL_SMARTSTRAP',
                 '-DPBL_MICROPHONE',
+                '-DPBL_DISPLAY_WIDTH=144',
+                '-DPBL_DISPLAY_HEIGHT=168',
                 '-D_TIME_H_',
             ],
             'do_cache': True,
         }}
-
+elif os.environ['PLATFORM'] == 'emery':
+    def FlagsForFile(filename, **kwargs):
+        return {{
+            'flags': [
+                '-std=c11',
+                '-x',
+                'c',
+                '-Wall',
+                '-Wextra',
+                '-Werror',
+                '-Wno-unused-parameter',
+                '-Wno-error=unused-function',
+                '-Wno-error=unused-variable',
+                '-I{sdk}/pebble/diorite/include',
+                '-I{here}/build',
+                '-I{here}',
+                '-I{here}/build/src',
+                '-I{here}/src',
+                '-I{here}/libraries/include',
+                '-isystem',
+                '{stdlib}',
+                '-DRELEASE',
+                '-DPBL_PLATFORM_EMERY',
+                '-DPBL_COLOR',
+                '-DPBL_SDK_3',
+                '-DPBL_RECT',
+                '-DPBL_HEALTH',
+                '-DPBL_SMARTSTRAP',
+                '-DPBL_MICROPHONE',
+                '-DPBL_COMPASS',
+                '-DPBL_SMARTSTRAP_POWER',
+                '-DPBL_DISPLAY_WIDTH=200',
+                '-DPBL_DISPLAY_HEIGHT=228',
+                '-D_TIME_H_',
+            ],
+            'do_cache': True,
+        }}
 else:
     raise Exception("Need a platform.")
