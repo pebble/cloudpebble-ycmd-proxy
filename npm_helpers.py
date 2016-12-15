@@ -52,7 +52,7 @@ def install_dependencies(dependencies, root_dir):
             # TODO: Should NPM itself have resource limits?
             subprocess.check_output([settings.NPM_BINARY, "prune"], stderr=subprocess.STDOUT, cwd=root_dir)
             if dependencies:
-                subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts"], stderr=subprocess.STDOUT, cwd=root_dir)
+                subprocess.check_output([settings.NPM_BINARY, "install", "--ignore-scripts", "--no-bin-links"], stderr=subprocess.STDOUT, cwd=root_dir)
                 subprocess.check_output([settings.NPM_BINARY, "dedupe"], stderr=subprocess.STDOUT, cwd=root_dir)
         except subprocess.CalledProcessError:
             # Setting the error message to e.output here would let the user see their lovely NPM error output.
